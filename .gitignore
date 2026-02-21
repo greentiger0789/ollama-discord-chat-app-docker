@@ -1,0 +1,11 @@
+# Ignore private SSH keys in the repo
+/ollama-data/id_ed25519
+/ollama-data/id_ed25519.pub
+
+# Generic private key/certificate patterns
+**/id_*
+*.pem
+*.key
+
+# Ignore Ollama persistent data (ignore whole directory)
+/ollama-data/
