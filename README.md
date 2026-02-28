@@ -51,7 +51,7 @@ docker exec -it ollama bash
 
 ```bash
 ollama run qwen3:14b
-ollama run freehuntx/qwen3-coder:8b
+ollama run freehuntx/qwen3-coder:14b
 ```
 
 > **注**: 上記は例です。利用可能なモデルは環境やインストール状況に依存します。公式 Ollama リポジトリで利用可能なモデルを確認してください。
