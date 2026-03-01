@@ -1,16 +1,21 @@
-version: "3.9"
-
 services:
   ollama:
-    image: ollama/ollama:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: ollama
     restart: unless-stopped
     ports:
       - "11434:11434"
     volumes:
       - ./ollama-data:/root/.ollama
+      - ./ollama-entrypoint.sh:/ollama-entrypoint.sh
+    entrypoint: /bin/sh
+    command: /ollama-entrypoint.sh
     environment:
       - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_AUTO_LOAD=${OLLAMA_AUTO_LOAD:-false}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3}
     deploy:
       resources:
         reservations:
@@ -23,6 +28,8 @@ services:
     image: ghcr.io/open-webui/open-webui:main
     container_name: open-webui
     restart: unless-stopped
+    profiles:
+      - webui
     depends_on:
       - ollama
     ports:
@@ -32,3 +39,15 @@ services:
     # On Linux, map host.docker.internal to the host gateway so the container can reach the Ollama host
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+  discord-bot:
+    build:
+      context: ./discord-bot
+    container_name: discord-bot
+    restart: unless-stopped
+    depends_on:
+      - ollama
+    env_file:
+      - .env
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434

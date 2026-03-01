@@ -9,3 +9,5 @@
 
 # Ignore Ollama persistent data (ignore whole directory)
 /ollama-data/
+
+.env
