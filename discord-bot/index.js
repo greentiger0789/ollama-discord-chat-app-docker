@@ -71,7 +71,7 @@ client.on('interactionCreate', async (interaction) => {
     await interaction.deferReply();
 
     try {
-        const replyMsg = await interaction.followUp({ content: '考え中…' });
+        const replyMsg = await interaction.followUp({ content: 'スレッドを作成しました' });
         const thread = await replyMsg.startThread({ name: `o-${interaction.user.username}-${Date.now() % 10000}`, autoArchiveDuration: 60 });
 
         threadHistory.set(thread.id, [{ role: 'user', text: prompt }]);
