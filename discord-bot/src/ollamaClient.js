@@ -6,27 +6,21 @@ import { SYSTEM_PROMPT } from './systemPrompt.js';
 const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY });
 
 export default function createOllamaClient({ baseURL = 'http://ollama:11434' } = {}) {
+
     const client = axios.create({
         baseURL,
-        timeout: 180000
+        timeout: 300000 // 推論モデル考慮（5分）
     });
 
     async function generate({ model = 'qwen3:14b', prompt = '', history = [] } = {}) {
 
-        // =============================
-        // 1️⃣ 検索戦略決定
-        // =============================
         const plan = await decideSearchPlan(client, model, prompt);
 
         let searchResults = '';
-
         if (plan.needSearch) {
             searchResults = await executeSearch(plan);
         }
 
-        // =============================
-        // 2️⃣ 最終プロンプト構築
-        // =============================
         const finalMessages = [
             { role: 'system', content: SYSTEM_PROMPT },
             ...history.map(m => ({
@@ -35,15 +29,12 @@ export default function createOllamaClient({ baseURL = 'http://ollama:11434' } =
             })),
             {
                 role: 'user',
-                content: plan.needSearch
+                content: plan.needSearch && searchResults
                     ? buildAugmentedPrompt(prompt, searchResults)
                     : prompt
             }
         ];
 
-        // =============================
-        // 3️⃣ 最終回答生成
-        // =============================
         try {
             const res = await client.post('/api/chat', {
                 model,
@@ -51,16 +42,17 @@ export default function createOllamaClient({ baseURL = 'http://ollama:11434' } =
                 stream: false,
                 options: {
                     num_ctx: 16384,
-                    num_predict: 3000,
+                    num_predict: 8192,
                     temperature: 0.3
                 }
             });
 
-            return (
-                res.data?.message?.content ||
-                res.data?.choices?.[0]?.message?.content ||
-                "回答を取得できませんでした。"
-            );
+            const content = extractAssistantMessage(res.data);
+
+            if (content !== null) return content;
+
+            console.error("Unknown response format:", res.data);
+            return "回答形式を解析できませんでした。";
 
         } catch (err) {
             if (err.response?.data) {
@@ -73,9 +65,8 @@ export default function createOllamaClient({ baseURL = 'http://ollama:11434' } =
     return { generate };
 }
 
-/* =====================================================
-   🔎 検索戦略決定
-===================================================== */
+/* ===================================================== */
+
 async function decideSearchPlan(client, model, prompt) {
 
     const forceKeywords = [
@@ -106,12 +97,7 @@ async function decideSearchPlan(client, model, prompt) {
             res.data?.choices?.[0]?.message?.content ||
             "{}";
 
-        let parsed;
-        try {
-            parsed = JSON.parse(raw);
-        } catch {
-            parsed = {};
-        }
+        const parsed = safeJsonParse(raw);
 
         return {
             needSearch: hasForceKeyword || !!parsed.needSearch,
@@ -128,23 +114,16 @@ async function decideSearchPlan(client, model, prompt) {
     }
 }
 
-/* =====================================================
-   🌐 エンジン実行
-===================================================== */
+/* ===================================================== */
+/* 🌐 検索 */
+/* ===================================================== */
+
 async function executeSearch(plan) {
-
     if (!plan.searchQuery) return "検索クエリが無効です。";
-
-    if (plan.engine === "ddg") {
-        return await searchDuckDuckGo(plan.searchQuery);
-    }
-
+    if (plan.engine === "ddg") return await searchDuckDuckGo(plan.searchQuery);
     return await searchTavily(plan.searchQuery);
 }
 
-/* =====================================================
-   🔵 Tavily（高度検索）
-===================================================== */
 async function searchTavily(query) {
     try {
         const response = await tvly.search(query, {
@@ -156,11 +135,11 @@ async function searchTavily(query) {
         if (!response?.results?.length)
             return "検索結果が見つかりませんでした。";
 
-        const formatted = response.results.map((r) => {
-            return `タイトル: ${r.title}
-        内容: ${truncate(r.content, 500)}
-        URL: ${r.url}`;
-        }).join("\n\n");
+        const formatted = response.results.map(r =>
+            `タイトル: ${r.title}
+内容: ${truncate(r.content, 500)}
+URL: ${r.url}`
+        ).join("\n\n");
 
         return truncate(formatted, 4000);
 
@@ -170,16 +149,12 @@ async function searchTavily(query) {
     }
 }
 
-/* =====================================================
-   🟢 DuckDuckGo（軽量検索）
-===================================================== */
 async function searchDuckDuckGo(query) {
     try {
         const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
         const res = await axios.get(url);
 
         const topics = res.data.RelatedTopics || [];
-
         const flattened = topics.flatMap(t => t.Topics || t);
 
         const results = flattened
@@ -196,9 +171,10 @@ async function searchDuckDuckGo(query) {
     }
 }
 
-/* =====================================================
-   🧠 検索統合プロンプト
-===================================================== */
+/* ===================================================== */
+/* 🧠 検索統合プロンプト */
+/* ===================================================== */
+
 function buildAugmentedPrompt(originalPrompt, searchResults) {
     return `
 以下はWeb検索結果です。
@@ -212,9 +188,86 @@ ${originalPrompt}
 `;
 }
 
-/* =====================================================
-   🔧 ユーティリティ
-===================================================== */
+/* ===================================================== */
+/* 🧠 JSON安全パース（推論汚染耐性） */
+/* ===================================================== */
+
+function safeJsonParse(rawText) {
+    if (!rawText) return {};
+
+    try {
+        // ① <think>削除
+        let clean = rawText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
+        // ② ```json ブロック除去
+        clean = clean.replace(/```json|```/g, '');
+
+        // ③ 最初と最後の{}抽出
+        const first = clean.indexOf('{');
+        const last = clean.lastIndexOf('}');
+        if (first !== -1 && last !== -1) {
+            clean = clean.slice(first, last + 1);
+        }
+
+        return JSON.parse(clean);
+    } catch {
+        return {};
+    }
+}
+
+/* ===================================================== */
+/* 🤖 レスポンス統合抽出 */
+/* ===================================================== */
+
+function extractAssistantMessage(data) {
+    if (!data) return null;
+
+    // ① Ollama標準
+    if (data.message) {
+        const { content, thinking } = data.message;
+
+        // content があり、かつ thinkタグ除去後に文字が残るなら返す
+        if (typeof content === "string") {
+            const cleaned = stripThinkTags(content).trim();
+            if (cleaned.length > 0) {
+                return cleaned;
+            }
+        }
+
+        // content が空で thinking のみ存在する場合は無視
+        return null;
+    }
+
+    // ② OpenAI互換
+    if (data.choices?.length) {
+        const msg = data.choices[0]?.message;
+        if (typeof msg?.content === "string") {
+            const cleaned = stripThinkTags(msg.content).trim();
+            if (cleaned.length > 0) {
+                return cleaned;
+            }
+        }
+        return null;
+    }
+
+    // ③ generate互換
+    if (typeof data.response === "string") {
+        const cleaned = stripThinkTags(data.response).trim();
+        if (cleaned.length > 0) {
+            return cleaned;
+        }
+    }
+
+    return null;
+}
+
+/* ===================================================== */
+
+function stripThinkTags(text) {
+    if (!text) return text;
+    return text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+}
+
 function truncate(text, maxLength) {
     if (!text) return '';
     return text.length > maxLength
