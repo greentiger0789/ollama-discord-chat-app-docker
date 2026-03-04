@@ -1,15 +1,3 @@
-# FROM node:24-slim
-
-# WORKDIR /app
-
-# COPY package*.json ./
-
-# RUN npm install
-
-# COPY . .
-
-# CMD ["node", "index.js"]
-
 FROM node:24-slim
 
 # pnpm を使えるようにする
