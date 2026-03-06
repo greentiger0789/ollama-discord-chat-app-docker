@@ -12,7 +12,55 @@ export default function createOllamaClient({ baseURL = 'http://ollama:11434' } =
         timeout: 300000 // 推論モデル考慮（5分）
     });
 
-    async function generate({ model = 'qwen3:14b', prompt = '', history = [] } = {}) {
+    async function generate({ model = 'qwen3.5:9b', prompt = '', history = [] } = {}) {
+
+        /* =========================================
+           ① トークン概算（かなり安全寄り）
+        ========================================= */
+
+        function estimateTokensFromText(text) {
+            if (!text) return 0;
+            return Math.ceil(text.length / 3); // 日本語LLM向けの緩い概算
+        }
+
+        function estimateTokensFromHistory(hist) {
+            return hist.reduce((sum, m) => {
+                return sum + estimateTokensFromText(m.text);
+            }, 0);
+        }
+
+        const MAX_CONTEXT_TOKENS = 12000;   // num_ctx 16384を考慮
+        const SAFETY_MARGIN = 2000;         // 推論thinking余白
+        const LIMIT = MAX_CONTEXT_TOKENS - SAFETY_MARGIN;
+
+        let processedHistory = [...history];
+
+        /* =========================================
+           ② 履歴が閾値を超えたら要約
+        ========================================= */
+
+        const historyTokens = estimateTokensFromHistory(history);
+        const promptTokens = estimateTokensFromText(prompt);
+
+        if (historyTokens + promptTokens > LIMIT && history.length > 1) {
+
+            // 🔥 最新userは除外
+            const oldHistory = history.slice(0, -1);
+
+            const summary = await summarizeHistory(client, model, oldHistory);
+
+            processedHistory = [
+                {
+                    role: "assistant",
+                    text: `【過去の会話要約】\n${summary}`
+                },
+                history[history.length - 1]
+            ];
+        }
+
+        /* =========================================
+           ③ 検索判定
+        ========================================= */
 
         const plan = await decideSearchPlan(client, model, prompt);
 
@@ -21,9 +69,13 @@ export default function createOllamaClient({ baseURL = 'http://ollama:11434' } =
             searchResults = await executeSearch(plan);
         }
 
+        /* =========================================
+           ④ 最終メッセージ構築
+        ========================================= */
+
         const finalMessages = [
             { role: 'system', content: SYSTEM_PROMPT },
-            ...history.map(m => ({
+            ...processedHistory.map(m => ({
                 role: m.role === 'user' ? 'user' : 'assistant',
                 content: m.text
             })),
@@ -34,6 +86,10 @@ export default function createOllamaClient({ baseURL = 'http://ollama:11434' } =
                     : prompt
             }
         ];
+
+        /* =========================================
+           ⑤ 本推論
+        ========================================= */
 
         try {
             const res = await client.post('/api/chat', {
@@ -224,9 +280,8 @@ function extractAssistantMessage(data) {
 
     // ① Ollama標準
     if (data.message) {
-        const { content, thinking } = data.message;
+        const { content } = data.message;
 
-        // content があり、かつ thinkタグ除去後に文字が残るなら返す
         if (typeof content === "string") {
             const cleaned = stripThinkTags(content).trim();
             if (cleaned.length > 0) {
@@ -234,7 +289,6 @@ function extractAssistantMessage(data) {
             }
         }
 
-        // content が空で thinking のみ存在する場合は無視
         return null;
     }
 
@@ -284,4 +338,31 @@ async function streamToString(stream) {
             : chunk.toString('utf8'));
     }
     return chunks.join('');
+}
+
+async function summarizeHistory(client, model, history) {
+    if (!history?.length) return null;
+
+    const messages = [
+        {
+            role: "system",
+            content: "以下の会話履歴を簡潔に要約してください。重要な事実・前提・未解決事項を保持してください。"
+        },
+        {
+            role: "user",
+            content: history.map(m => `${m.role}: ${m.text}`).join("\n")
+        }
+    ];
+
+    const res = await client.post('/api/chat', {
+        model,
+        messages,
+        stream: false,
+        options: {
+            temperature: 0,
+            num_predict: 512
+        }
+    });
+
+    return extractAssistantMessage(res.data);
 }
