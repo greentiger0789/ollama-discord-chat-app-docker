@@ -50,6 +50,7 @@ docker exec -it ollama bash
 ### 3. モデルを実行
 
 ```bash
+ollama run qwen3.5:9b
 ollama run qwen3:14b
 ollama run freehuntx/qwen3-coder:14b
 ```

@@ -15,7 +15,7 @@ services:
     environment:
       - OLLAMA_HOST=0.0.0.0
       - OLLAMA_AUTO_LOAD=${OLLAMA_AUTO_LOAD:-false}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3.5:9b}
     deploy:
       resources:
         reservations:
