@@ -13,6 +13,7 @@ services:
     entrypoint: /bin/sh
     command: /ollama-entrypoint.sh
     environment:
+      - TZ=Asia/Tokyo
       - OLLAMA_HOST=0.0.0.0
       - OLLAMA_AUTO_LOAD=${OLLAMA_AUTO_LOAD:-false}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3.5:9b}
@@ -35,8 +36,8 @@ services:
     ports:
       - "3000:8080"
     environment:
+      - TZ=Asia/Tokyo
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
-    # On Linux, map host.docker.internal to the host gateway so the container can reach the Ollama host
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -50,4 +51,5 @@ services:
     env_file:
       - .env
     environment:
+      - TZ=Asia/Tokyo
       - OLLAMA_BASE_URL=http://ollama:11434
