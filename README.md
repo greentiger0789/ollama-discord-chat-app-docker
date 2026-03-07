@@ -1,24 +1,45 @@
-# ollama-docker
+# Discord Ollama Bot
 
-ローカルに永続化されたデータ（モデル、鍵、履歴など）を使って Ollama を Docker Compose で起動するシンプルなセットアップです。
-Open WebUI との連携対応済み。
+Ollama をバックエンドに使用した Discord ボットです。質問応答、Web検索、会話履歴の管理、そして「メイドちゃん」キャラクターによる独創的な応答が可能です。
+
 
 ---
 
 ## 📋 目次
 
+- [特徴](#特徴)
 - [前提条件](#前提条件)
 - [クイックスタート](#クイックスタート)
 - [ディレクトリ構成](#ディレクトリ構成)
-- [機能](#機能)
-  - [データ永続化](#データ永続化)
-  - [Open WebUI 連携](#open-webui-連携)
-  - [GPU サポート](#gpu-サポート)
-- [詳細セットアップ](#詳細セットアップ)
-  - [NVIDIA Container Toolkit（WSL2/Ubuntu）](#nvidia-container-toolkitwsl2ubuntu)
-- [セキュリティ注意](#セキュリティ注意)
-- [トラブルシューティング / FAQ](#トラブルシューティング--faq)
+- [環境変数](#環境変数)
+- [設定](#設定)
+- [実行方法](#実行方法)
+  - [Docker Compose で実行](#docker-compose-で実行)
+  - [直接 Node.js で実行](#直接-nodejs-で実行)
+- [スラッシュコマンド](#スラッシュコマンド)
+- [機能詳細](#機能詳細)
+  - [会話履歴管理](#会話履歴管理)
+  - [Web検索機能](#web検索機能)
+  - [応答生成戦略](#応答生成戦略)
+- [テスト](#テスト)
+- [CI/CD](#cicd)
+- [プロジェクト構成](#プロジェクト構成)
+- [Ollama サーバー設定](#ollama-サーバー設定)
+- [トラブルシューティング](#トラブルシューティング)
 - [参考リンク](#参考リンク)
+- [バージョン履歴](#バージョン履歴)
+
+---
+
+## 特徴
+
+- 🔹 **Ollama 連携**: `ollama/ollama` との連携で、独自のLLMモデルを活用
+- 🔹 **Discord Slash Command**: `/o` コマンドで簡単質問応答
+- 🔹 **会話履歴管理**: スレッド単位での会話履歴を自動管理
+- 🔹 **Web検索統合**: Tavily / DuckDuckGo を使ったリアルタイム検索
+- 🔹 **キャラクター設定**: 「メイドちゃん」としての独創的応答
+- 🔹 **応答分割送信**: 長文応答を自動的に分割して送信
+- 🔹 **コンテナ化**: Docker Compose で簡単デプロイ
 
 ---
 
@@ -28,42 +49,44 @@ Open WebUI との連携対応済み。
 
 - **Docker** （推奨: 最新版）
 - **Docker Compose** （v2 以上推奨）
-- **NVIDIA GPU** （オプション：GPU を使用する場合）
-- **NVIDIA Container Toolkit** （WSL2/Ubuntu + GPU の場合、後述の手順で導入）
+- **Node.js** （v24以上、直接実行する場合）
+- **Discord Bot Token** ([Discord Developer Portal](https://discord.com/developers/applications)で作成)
+- **Ollama サーバー** (`http://localhost:11434` または別ホスト)
+- **Tavily API Key** （Web検索機能を使用する場合、[Tavily API](https://tavily.com/)で取得）
 
 ---
 
 ## クイックスタート
 
-### 1. コンテナをバックグラウンドで起動
+### 1. 環境変数の設定
+
+`.env` ファイルをプロジェクトルートに作成し、以下の内容を記述します：
+
+```env
+# Discord
+DISCORD_TOKEN=your_discord_bot_token
+DISCORD_GUILD_ID=your_server_id (オプション)
+
+# Ollama
+OLLAMA_BASE_URL=http://ollama:11434
+OLLAMA_MODEL=qwen3.5:9b
+
+# Tavily (オプション)
+TAVILY_API_KEY=your_tavily_api_key
+```
+
+> **参考**: `.env.example` ファイルの内容を参考にしてください。
+
+### 2. コンテナを起動
 
 ```bash
 docker compose up -d
 ```
 
-### 2. Ollama コンテナで対話的にアクセス
+### 3. Bot を Discord で確認
 
-```bash
-docker exec -it ollama bash
-```
-
-### 3. モデルを実行
-
-```bash
-ollama run qwen3.5:9b
-ollama run qwen3:14b
-ollama run freehuntx/qwen3-coder:14b
-```
-
-> **注**: 上記は例です。利用可能なモデルは環境やインストール状況に依存します。公式 Ollama リポジトリで利用可能なモデルを確認してください。
-
-### 4. Open WebUI にブラウザでアクセス
-
-ブラウザで以下にアクセスしてください：
-
-```
-http://localhost:3000
-```
+- Discord を開き、`/o` コマンドを実行
+- メッセージを入力すると、Bot が応答します
 
 ---
 
@@ -71,251 +94,210 @@ http://localhost:3000
 
 ```
 .
-├── docker-compose.yml     # Docker Compose サービス定義
-├── Dockerfile             # コンテナイメージ定義
-├── README.md              # このファイル
-├── .gitignore             # Git 無視設定
-└── ollama-data/           # 永続ストレージ（ホスト側）
-    ├── history/           # CLI 履歴
-    ├── id_ed25519         # SSH 秘密鍵 ⚠️ (Git 追跡対象外)
-    ├── id_ed25519.pub     # SSH 公開鍵
-    └── models/            # ダウンロード済みモデル
-        ├── blobs/         # モデルブロビング
-        └── manifests/     # モデルマニフェスト
+├── README.md                    # このファイル
+├── docker-compose.yml           # Docker Compose 設定
+├── Dockerfile                   # Ollama サーバー用 Dockerfile
+├── ollama-entrypoint.sh         # Ollama 起動スクリプト
+├── .env                         # 環境変数（Git では無視）
+├── .env.example                 # 環境変数のテンプレート
+├── .gitignore                   # Git 無視設定
+├── .github/
+│   └── workflows/
+│       └── ci.yml               # CI/CD パイプライン設定
+├── discord-bot/                 # Discord Bot ディレクトリ
+│   ├── index.js                 # メインスクリプト
+│   ├── package.json             # Node.js 依存関係
+│   ├── .dockerignore            # Docker ignore 設定
+│   ├── Dockerfile               # Bot 用 Dockerfile
+│   ├── src/
+│   │   ├── ollamaClient.js      # Ollama クライアント
+│   │   ├── systemPrompt.js      # システムプロンプト
+│   │   └── decisionPrompt.js    # 検索判定プロンプト
+│   └── test/
+│       └── ollamaClient.test.js # テストスクリプト
+└── ollama-data/                 # Ollama データ永続化用
+    ├── models/
+    └── history/
 ```
 
 ---
 
-## 機能
+## 環境変数
 
-### データ永続化
-
-`ollama-data/` をホストボリュームとしてマウントしています。
-
-**利点:**
-
-- コンテナ再作成後も、モデル・履歴・設定データが失われない
-- バックアップが容易
-- ホスト側からのアクセス・管理が可能
-
-> **パーミッション注意**: ボリューム内のファイルのオーナーがコンテナ内の UID と異なる場合、パーミッションエラーが発生することがあります。必要に応じて `sudo chown -R` で修正してください。
+| 変数名 | 必須 | 説明 |
+|--------|------|------|
+| `DISCORD_TOKEN` | ✅ | Discord Bot のトークン |
+| `DISCORD_GUILD_ID` | ❌ | コマンドを登録するサーバーID（指定しない場合はグローバルコマンド） |
+| `OLLAMA_BASE_URL` | ❌ | Ollama サーバーのURL (デフォルト: `http://ollama:11434`) |
+| `OLLAMA_MODEL` | ❌ | 使用するモデル名 (デフォルト: `qwen3.5:9b`) |
+| `TAVILY_API_KEY` | ❌ | Web検索機能に使用するAPIキー |
 
 ---
 
-### Open WebUI 連携
+## 設定
 
-`docker-compose.yml` に `open-webui` サービスを含めています。
+### Discord Bot の設定
 
-**起動方法:**
+1. [Discord Developer Portal](https://discord.com/developers/applications) にアクセス
+2. 新しいアプリケーションを作成
+3. Bot を追加し、トークンをコピー
+4. Bot の権限設定で以下の権限を付与：
+   - `Send Messages`
+   - `Read Message History`
+   - `Embed Links`
+   - `Manage Threads`
+5. サーバーに Bot を招待
+
+### Ollama サーバーの設定
+
+`docker-compose.yml` で Ollama を起動する設定が含まれています。以下のモデルを自動でロードする設定となっています：
+
+- `qwen3.5:9b` （デフォルト）
+
+---
+
+## 実行方法
+
+### Docker Compose で実行
 
 ```bash
+# 環境変数ファイルを作成
+cp .env.example .env
+# .env を編集して環境変数を設定
+
+# 起動
 docker compose up -d
 ```
 
-両方のサービスが起動します：
+### 直接 Node.js で実行
 
-- **Ollama**: `http://localhost:11434`
-- **Open WebUI**: `http://localhost:3000`
+```bash
+# 依存関係のインストール
+cd discord-bot
+npm install
 
-**アーキテクチャ:**
-
-Open WebUI は `OLLAMA_BASE_URL=http://host.docker.internal:11434` で Ollama に接続します。
-Linux 環境では `extra_hosts: ["host.docker.internal:host-gateway"]` を設定して対応しています。
-
-**トラブル時:**
-
-`host.docker.internal` が解決しない場合、`docker-compose.yml` の `OLLAMA_BASE_URL` をホスト IP に置き換えてください：
-
-```yaml
-OLLAMA_BASE_URL: http://192.168.x.x:11434
+# 実行
+npm start
 ```
 
 ---
 
-### GPU サポート
+## スラッシュコマンド
 
-`docker-compose.yml` の Ollama サービスに GPU アクセス設定を含めています（`deploy.resources` セクション）。
+### `/o` コマンド
 
-**動作するには:**
-
-- ホスト側に NVIDIA GPU が搭載されていること
-- NVIDIA Container Toolkit をインストール済みであること（後述）
-
-GPU が検出されない場合は、NVIDIA Container Toolkit の導入手順を参照してください。
-
----
-
-## 詳細セットアップ
-
-### NVIDIA Container Toolkit（WSL2/Ubuntu）
-
-WSL2 上で GPU を利用する場合は、NVIDIA Container Toolkit を導入する必要があります。
-
-#### ステップ 1: リポジトリ設定と GPG キー追加
-
-```bash
-curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | \
-  sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg && \
-curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
-  sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
-  sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
-```
-
-#### ステップ 2: ツールキットをインストール
-
-```bash
-sudo apt-get update
-sudo apt-get install -y nvidia-container-toolkit
-```
-
-#### ステップ 3: Docker に NVIDIA ランタイムを設定
-
-```bash
-sudo nvidia-ctk runtime configure --runtime=docker
-```
-
-#### ステップ 4: Docker デーモンを再起動
-
-```bash
-sudo service docker restart
-```
-
-検証:
-
-```bash
-docker run --rm --gpus all nvidia/cuda:11.8.0-runtime-ubuntu22.04 nvidia-smi
-```
-
-上記で GPU 情報が表示されれば成功です。
+- **説明**: Ollama にプロンプトを送信
+- **引数**:
+  - `prompt` (必須): 送信するプロンプト
+- **応答**:
+  - スレッドを作成し、応答を返信
+  - 長文の場合は自動的に分割して送信
 
 ---
 
-## セキュリティ注意
+## 機能詳細
 
-⚠️ **重要な注意： このリポジトリに SSH 秘密鍵（`ollama-data/id_ed25519`）が含まれています**
+### 会話履歴管理
 
-**公開リポジトリで使用する場合の手順:**
+- スレッドごとに会話履歴を保持
+- 履歴が長くなると自動で要約
+- 最大コンテキスト長を考慮した履歴管理
 
-1. リポジトリをクローン後、新しい鍵を生成：
+### Web検索機能
 
-```bash
-ssh-keygen -t ed25519 -f ollama-data/id_ed25519 -N ""
-```
+- 質問内容に応じて、Tavily または DuckDuckGo を使用
+- 検索が必要なキーワード（例: 「最新」「今日」「価格」など）を自動判定
+- 検索結果を元に回答を生成
 
-2. 既存の鍵がコミットされている場合は、Git 履歴から削除：
+### 応答生成戦略
 
-```bash
-git rm --cached ollama-data/id_ed25519 ollama-data/id_ed25519.pub
-git commit -m "Remove sensitive keys from history"
-git push
-```
-
-3. リモートサービスで旧鍵をマイグレーション / 無効化します
-
----
-
-## トラブルシューティング / FAQ
-
-### Q1: Open WebUI が Ollama に接続できない
-
-**原因:** `host.docker.internal` が Linux で解決していない可能性、またはファイアウォール設定
-
-**対策:**
-
-1. ホスト IP を確認:
-
-```bash
-hostname -I
-```
-
-2. `docker-compose.yml` の `OLLAMA_BASE_URL` をホスト IP に置き換え：
-
-```yaml
-environment:
-  OLLAMA_BASE_URL: http://<ホストIP>:11434
-```
-
-3. コンテナを再起動：
-
-```bash
-docker compose down
-docker compose up -d
-```
+1. **トークン概算**: 入力テキストの長さから概算トークン数を計算
+2. **履歴要約**: 履歴が長すぎると、要約してコンテキストを節約
+3. **検索判定**: Web検索が必要かどうかを判定
+4. **応答生成**: 検索結果を含めた状態でLLMにプロンプトを送信
+5. **応答分割**: 長文の場合は Discord の上限 (2000文字) に合わせて分割
 
 ---
 
-### Q2: GPU が Docker コンテナで認識されない
-
-**原因:** NVIDIA Container Toolkit が未導入、または Docker デーモン設定が不完全
-
-**対策:**
-
-1. NVIDIA Container Toolkit が導入されているか確認：
+## テスト
 
 ```bash
-which nvidia-ctk
+# Discord Bot 内でテスト実行
+cd discord-bot
+npm test
 ```
 
-2. 未導入の場合は、前述の「NVIDIA Container Toolkit（WSL2/Ubuntu）」セクションに従ってインストール
-
-3. Docker が NVIDIA ランタイムを使用するか確認：
-
-```bash
-docker info | grep nvidia
-```
+テストカバレッジ：
+- 基本応答機能
+- 履歴あり応答
+- 長文履歴処理
 
 ---
 
-### Q3: Ollama モデルをローカルディレクトリに保存したい
+## CI/CD
 
-**説明:** デフォルトで `ollama-data/` ディレクトリ（ボリューム）に保存されています。
+`.github/workflows/ci.yml` で CI/CD パイプラインが設定されています。
 
-**確認方法:**
-
-```bash
-docker exec -it ollama bash
-# コンテナ内で
-ls -la /root/.ollama/models
-```
-
-ホスト側では `./ollama-data/models/` として見えます。バックアップが必要な場合はこのディレクトリをコピーしてください。
+- **トリガー**: `main` および `develop` ブランチへのプッシュ、PR
+- **テスト実行**: `npm test` コマンド
 
 ---
 
-### Q4: Dockerfile をカスタマイズしたい
+## プロジェクト構成
 
-**説明:** リポジトリの `Dockerfile` を編集することで、ベースイメージやインストール済みツールをカスタマイズできます。
+### Discord Bot (`discord-bot/`)
 
-修正後、イメージを再ビルド：
+- **`index.js`**: メインスクリプト。Discord Client やスラッシュコマンドの登録
+- **`src/ollamaClient.js`**: Ollama との通信を担当。検索判定や履歴要約もここに含まれる
+- **`src/systemPrompt.js`**: メイドちゃんキャラクター設定
+- **`src/decisionPrompt.js`**: Web検索が必要かどうかを判定するプロンプト
 
-```bash
-docker compose build
-docker compose up -d
-```
+### Ollama サーバー
+
+- **`Dockerfile`**: Ollama サーバー用のカスタムDockerfile
+- **`ollama-entrypoint.sh`**: サーバー起動時にモデルを自動でロードするスクリプト
 
 ---
 
-### Q5: Ollama のマニュアル操作（REPL）
+## Ollama サーバー設定
 
-Ollama のインタラクティブシェル（REPL）にアクセス：
+`docker-compose.yml` で以下の設定が含まれています：
 
-```bash
-docker exec -it ollama ollama list
-```
+- **Ollama サービス**: `11434` ポートで公開
+- **Open WebUI サービス**: `3000` ポートで公開（オプション）
+- **GPU サポート**: NVIDIA GPU 使用時、`deploy.resources` で設定
 
-モデルの詳細情報や操作は Ollama の公式ドキュメント参照。
+---
+
+## トラブルシューティング
+
+### Bot が応答しない
+
+- `DISCORD_TOKEN` が正しいか確認
+- Bot の権限が適切に設定されているか確認
+- Ollama サーバーが起動しているか確認
+
+### Ollama サーバーに接続できない
+
+- `OLLAMA_BASE_URL` が正しいか確認
+- コンテナ間のネットワーク設定を確認
+
+### Web検索が機能しない
+
+- `TAVILY_API_KEY` が正しいか確認
+- API の制限を超えていないか確認
 
 ---
 
 ## 参考リンク
 
+- [Discord.js ドキュメント](https://discord.js.org/)
 - [Ollama 公式ドキュメント](https://github.com/ollama/ollama)
-- [Open WebUI リポジトリ](https://github.com/open-webui/open-webui)
-- [NVIDIA Container Toolkit GitHub リポジトリ（インストール手順含む）](https://github.com/NVIDIA/nvidia-container-toolkit)
+- [Tavily API](https://tavily.com/)
 - [Docker Compose 公式ドキュメント](https://docs.docker.com/compose/)
 
 ---
 
-**最後更新:** 2026年2月18日
 
-コントリビューションや改善提案は、お気軽にイシューやPRでお知らせください。
+**Contributions welcome!** 🎉
+issues や PR をお気軽に送ってください。
