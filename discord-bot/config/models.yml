@@ -1,0 +1,27 @@
+models:
+  qwen3.5:9b:
+    num_ctx: 16384
+    num_predict: 8192
+    temperature: 0.3
+
+  qwen3:14b:
+    num_ctx: 16384
+    num_predict: 8192
+    temperature: 0.3
+
+  freehuntx/qwen3-coder:14b:
+    num_ctx: 16384
+    num_predict: 8192
+    temperature: 0.3
+
+  qwen3.5:cloud:
+    num_ctx: 131072
+    num_predict: 4096
+    num_keep: 2048
+    temperature: 0.4
+
+    mirostat: 2
+    mirostat_tau: 5
+    mirostat_eta: 0.1
+
+    repeat_penalty: 1.1

@@ -13,6 +13,7 @@
         "dotenv": "^16.4.7",
         "@discordjs/rest": "^2.6.0",
         "discord-api-types": "^0.38.40",
-        "@tavily/core": "^0.7.2"
+        "@tavily/core": "^0.7.2",
+        "js-yaml": "^4.1.1"
     }
 }

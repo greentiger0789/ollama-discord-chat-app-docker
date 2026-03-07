@@ -1,9 +1,21 @@
 import { tavily } from '@tavily/core';
 import axios from 'axios';
+import fs from 'fs';
+import yaml from 'js-yaml';
+import path from 'path';
 import { decisionPrompt } from './decisionPrompt.js';
 import { SYSTEM_PROMPT } from './systemPrompt.js';
 
 const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY });
+const MODEL_CONFIG_PATH = path.resolve('./config/models.yaml');
+let MODEL_CONFIG = {};
+
+try {
+    const file = fs.readFileSync(MODEL_CONFIG_PATH, 'utf8');
+    MODEL_CONFIG = yaml.load(file)?.models || {};
+} catch (err) {
+    console.warn("Model config load failed. Using defaults.");
+}
 
 export default function createOllamaClient({ baseURL = 'http://ollama:11434' } = {}) {
 
@@ -92,15 +104,12 @@ export default function createOllamaClient({ baseURL = 'http://ollama:11434' } =
         ========================================= */
 
         try {
+            const modelOptions = getModelOptions(model);
             const res = await client.post('/api/chat', {
                 model,
                 messages: finalMessages,
                 stream: false,
-                options: {
-                    num_ctx: 16384,
-                    num_predict: 8192,
-                    temperature: 0.3
-                }
+                options: modelOptions
             });
 
             const content = extractAssistantMessage(res.data);
@@ -365,4 +374,24 @@ async function summarizeHistory(client, model, history) {
     });
 
     return extractAssistantMessage(res.data);
+}
+
+function getModelOptions(model) {
+
+    const defaults = {
+        num_ctx: 16384,
+        num_predict: 8192,
+        temperature: 0.3
+    };
+
+    const cfg = MODEL_CONFIG[model];
+
+    if (!cfg || typeof cfg !== "object") {
+        return defaults;
+    }
+
+    return {
+        ...defaults,
+        ...cfg
+    };
 }
