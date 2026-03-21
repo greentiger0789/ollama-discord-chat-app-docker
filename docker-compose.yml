@@ -11,7 +11,7 @@ services:
       - .env
     volumes:
       - ./ollama-data:/root/.ollama
-      - ./ollama-entrypoint.sh:/ollama-entrypoint.sh
+      - ./ollama-entrypoint.sh:/ollama-entrypoint.sh:ro
     entrypoint: /bin/sh
     command: /ollama-entrypoint.sh
     deploy:
@@ -26,7 +26,7 @@ services:
       interval: 60s
       timeout: 10s
       retries: 3
-      start_period: 5s # 起動直後のチェック開始までの猶予
+      start_period: 5s
 
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
@@ -54,3 +54,6 @@ services:
         condition: service_healthy
     env_file:
       - .env
+    volumes:
+      - ./discord-bot/logs:/app/logs
+      - ./discord-bot/config:/app/config:ro
