@@ -17,7 +17,10 @@ try {
     console.warn("Model config load failed. Using defaults.");
 }
 
-export default function createOllamaClient({ baseURL = 'http://ollama:11434' } = {}) {
+// デフォルトの検索関数
+const defaultSearchFn = async (plan) => executeSearchWithDeps(plan, tvly, axios);
+
+export default function createOllamaClient({ baseURL = 'http://ollama:11434', searchFn = defaultSearchFn } = {}) {
 
     const client = axios.create({
         baseURL,
@@ -78,7 +81,7 @@ export default function createOllamaClient({ baseURL = 'http://ollama:11434' } =
 
         let searchResults = '';
         if (plan.needSearch) {
-            searchResults = await executeSearch(plan);
+            searchResults = await searchFn(plan);
         }
 
         /* =========================================
@@ -180,18 +183,18 @@ async function decideSearchPlan(client, model, prompt) {
 }
 
 /* ===================================================== */
-/* 🌐 検索 */
+/* 🌐 検索（依存関係注入版）
 /* ===================================================== */
 
-async function executeSearch(plan) {
+async function executeSearchWithDeps(plan, tavilyClient, axiosInstance) {
     if (!plan.searchQuery) return "検索クエリが無効です。";
-    if (plan.engine === "ddg") return await searchDuckDuckGo(plan.searchQuery);
-    return await searchTavily(plan.searchQuery);
+    if (plan.engine === "ddg") return await searchDuckDuckGoWithDeps(plan.searchQuery, axiosInstance);
+    return await searchTavilyWithDeps(plan.searchQuery, tavilyClient);
 }
 
-async function searchTavily(query) {
+async function searchTavilyWithDeps(query, tavilyClient) {
     try {
-        const response = await tvly.search(query, {
+        const response = await tavilyClient.search(query, {
             searchDepth: "advanced",
             maxResults: 5,
             includeAnswer: false
@@ -214,10 +217,10 @@ URL: ${r.url}`
     }
 }
 
-async function searchDuckDuckGo(query) {
+async function searchDuckDuckGoWithDeps(query, axiosInstance) {
     try {
         const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
-        const res = await axios.get(url);
+        const res = await axiosInstance.get(url);
 
         const topics = res.data.RelatedTopics || [];
         const flattened = topics.flatMap(t => t.Topics || t);
@@ -262,7 +265,7 @@ function safeJsonParse(rawText) {
 
     try {
         // ① <think>削除
-        let clean = rawText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+        let clean = rawText.replace(/<think[\s\S]*?<\/think>/gi, '').trim();
 
         // ② ```json ブロック除去
         clean = clean.replace(/```json|```/g, '');
@@ -328,7 +331,12 @@ function extractAssistantMessage(data) {
 
 function stripThinkTags(text) {
     if (!text) return text;
-    return text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
+    return text
+        .replace(/<think[\s\S]*?<\/think>/gi, '')
+        .replace(/<tool_call[\s\S]*?<\/tool_call>/gi, '')
+        .replace(/<tool_call[\s\S]*?<\/think>/gi, '') // 壊れたタグ対策
+        .trim();
 }
 
 function truncate(text, maxLength) {
@@ -347,6 +355,23 @@ async function streamToString(stream) {
             : chunk.toString('utf8'));
     }
     return chunks.join('');
+}
+
+/* ===================================================== */
+/* 設定値とデフォルトクライアント */
+/* ===================================================== */
+
+export const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen3.5:9b';
+export const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://ollama:11434';
+
+const defaultClient = createOllamaClient({ baseURL: OLLAMA_BASE_URL });
+
+export async function generateResponse(prompt, history, model = OLLAMA_MODEL) {
+    return await defaultClient.generate({
+        model,
+        prompt,
+        history
+    });
 }
 
 async function summarizeHistory(client, model, history) {
