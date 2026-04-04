@@ -7,7 +7,7 @@ import { handleThreadMessage } from './src/handlers/threadMessageHandler.js';
 /* Ready */
 /* ========================================================= */
 
-client.once('ready', async () => {
+client.once('clientReady', async () => {
     console.log('Logged in as', client.user.tag);
     await registerCommands();
 });
