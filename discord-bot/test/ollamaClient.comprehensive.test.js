@@ -1,6 +1,6 @@
-import axios from "axios";
 import assert from "node:assert/strict";
 import test, { after, before, describe } from "node:test";
+import createOllamaClient from "../src/ollamaClient.js";
 
 // console.errorを抑制（モジュール読み込み前に設定）
 let originalConsoleError;
@@ -17,19 +17,19 @@ after(() => {
 let mockPostHandler;
 let mockGetHandler;
 
-// axiosモック
-axios.create = () => ({
-    post: (...args) => mockPostHandler(...args),
-    get: (...args) => mockGetHandler(...args)
-});
+function buildMockHttpClient() {
+    return {
+        post: (...args) => mockPostHandler(...args),
+        get: (...args) => mockGetHandler(...args)
+    };
+}
 
-// テスト対象を動的インポート
-let createOllamaClient;
-
-before(async () => {
-    const module = await import("../src/ollamaClient.js");
-    createOllamaClient = module.default;
-});
+function buildClient(options = {}) {
+    return createOllamaClient({
+        httpClient: buildMockHttpClient(),
+        ...options
+    });
+}
 
 /* ================================
    基本応答テスト
@@ -46,7 +46,7 @@ describe("generate() basic functionality", () => {
         });
         mockGetHandler = async () => ({ data: {} });
 
-        const client = createOllamaClient({
+        const client = buildClient({
             baseURL: "http://mock-ollama"
         });
 
@@ -67,7 +67,7 @@ describe("generate() basic functionality", () => {
             }
         });
 
-        const client = createOllamaClient();
+        const client = buildClient();
         const result = await client.generate({ prompt: "", history: [] });
 
         assert.ok(typeof result === "string");
@@ -82,7 +82,7 @@ describe("generate() basic functionality", () => {
             }
         });
 
-        const client = createOllamaClient();
+        const client = buildClient();
         const result = await client.generate({ prompt: "テスト" });
 
         assert.ok(typeof result === "string");
@@ -103,7 +103,7 @@ describe("generate() history handling", () => {
             }
         });
 
-        const client = createOllamaClient();
+        const client = buildClient();
 
         const result = await client.generate({
             prompt: "続けて",
@@ -130,7 +130,7 @@ describe("generate() history handling", () => {
             text: "テスト".repeat(200)
         }));
 
-        const client = createOllamaClient();
+        const client = buildClient();
 
         const result = await client.generate({
             prompt: "長文テスト",
@@ -149,7 +149,7 @@ describe("generate() history handling", () => {
             }
         });
 
-        const client = createOllamaClient();
+        const client = buildClient();
 
         const result = await client.generate({
             prompt: "テスト",
@@ -217,7 +217,7 @@ describe("generate() search decision", () => {
             }
         });
 
-        const client = createOllamaClient({ searchFn: mockSearchFn });
+        const client = buildClient({ searchFn: mockSearchFn });
 
         // 「今日」は強制検索キーワード
         const result = await client.generate({
@@ -250,7 +250,7 @@ describe("generate() search decision", () => {
             }
         });
 
-        const client = createOllamaClient({ searchFn: mockSearchFn });
+        const client = buildClient({ searchFn: mockSearchFn });
 
         const result = await client.generate({
             prompt: "こんにちは",
@@ -280,7 +280,7 @@ describe("generate() response formats", () => {
             }
         });
 
-        const client = createOllamaClient();
+        const client = buildClient();
         const result = await client.generate({
             prompt: "テスト",
             history: []
@@ -296,7 +296,7 @@ describe("generate() response formats", () => {
             }
         });
 
-        const client = createOllamaClient();
+        const client = buildClient();
         const result = await client.generate({
             prompt: "テスト",
             history: []
@@ -332,7 +332,7 @@ describe("generate() response formats", () => {
             };
         };
 
-        const client = createOllamaClient();
+        const client = buildClient();
         const result = await client.generate({
             prompt: "テスト",
             history: []
@@ -351,7 +351,7 @@ describe("generate() response formats", () => {
             }
         });
 
-        const client = createOllamaClient();
+        const client = buildClient();
         const result = await client.generate({
             prompt: "テスト",
             history: []
@@ -374,7 +374,7 @@ describe("generate() error handling", () => {
             }
         });
 
-        const client = createOllamaClient();
+        const client = buildClient();
         const result = await client.generate({
             prompt: "テスト",
             history: []
@@ -388,7 +388,7 @@ describe("generate() error handling", () => {
             throw new Error("Network error");
         };
 
-        const client = createOllamaClient();
+        const client = buildClient();
 
         try {
             await client.generate({
@@ -411,7 +411,7 @@ describe("generate() error handling", () => {
             throw error;
         };
 
-        const client = createOllamaClient();
+        const client = buildClient();
 
         // err.response.dataがある場合、streamToString()が呼ばれて
         // エラーメッセージとして返される（例外は投げられない）
@@ -443,7 +443,7 @@ describe("generate() model options", () => {
             };
         };
 
-        const client = createOllamaClient();
+        const client = buildClient();
         await client.generate({
             prompt: "テスト",
             history: []
@@ -466,7 +466,7 @@ describe("generate() model options", () => {
             };
         };
 
-        const client = createOllamaClient();
+        const client = buildClient();
         await client.generate({
             model: "custom-model",
             prompt: "テスト",
@@ -496,7 +496,7 @@ describe("generate() message construction", () => {
             };
         };
 
-        const client = createOllamaClient();
+        const client = buildClient();
         await client.generate({
             prompt: "テスト",
             history: []
@@ -521,7 +521,7 @@ describe("generate() message construction", () => {
             };
         };
 
-        const client = createOllamaClient();
+        const client = buildClient();
         await client.generate({
             prompt: "テスト",
             history: [

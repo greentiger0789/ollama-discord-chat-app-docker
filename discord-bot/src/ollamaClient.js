@@ -1,13 +1,14 @@
 import { tavily } from '@tavily/core';
-import axios from 'axios';
 import fs from 'fs';
 import yaml from 'js-yaml';
+import fetch from 'node-fetch';
 import path from 'path';
 import { decisionPrompt } from './decisionPrompt.js';
 import { SYSTEM_PROMPT } from './systemPrompt.js';
 
 const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY });
 const MODEL_CONFIG_PATH = path.resolve('./config/models.yaml');
+const DEFAULT_REQUEST_TIMEOUT_MS = 300000;
 let MODEL_CONFIG = {};
 
 try {
@@ -18,14 +19,15 @@ try {
 }
 
 // デフォルトの検索関数
-const defaultSearchFn = async (plan) => executeSearchWithDeps(plan, tvly, axios);
+const defaultSearchFn = async (plan) => executeSearchWithDeps(plan, tvly, createHttpClient());
 
-export default function createOllamaClient({ baseURL = 'http://ollama:11434', searchFn = defaultSearchFn } = {}) {
+export default function createOllamaClient({
+    baseURL = 'http://ollama:11434',
+    searchFn = defaultSearchFn,
+    httpClient = createHttpClient({ baseURL, timeout: DEFAULT_REQUEST_TIMEOUT_MS })
+} = {}) {
 
-    const client = axios.create({
-        baseURL,
-        timeout: 300000 // 推論モデル考慮（5分）
-    });
+    const client = httpClient;
 
     async function generate({ model = 'qwen3.5:9b', prompt = '', history = [] } = {}) {
 
@@ -186,9 +188,9 @@ async function decideSearchPlan(client, model, prompt) {
 /* 🌐 検索（依存関係注入版）
 /* ===================================================== */
 
-async function executeSearchWithDeps(plan, tavilyClient, axiosInstance) {
+async function executeSearchWithDeps(plan, tavilyClient, httpClient) {
     if (!plan.searchQuery) return "検索クエリが無効です。";
-    if (plan.engine === "ddg") return await searchDuckDuckGoWithDeps(plan.searchQuery, axiosInstance);
+    if (plan.engine === "ddg") return await searchDuckDuckGoWithDeps(plan.searchQuery, httpClient);
     return await searchTavilyWithDeps(plan.searchQuery, tavilyClient);
 }
 
@@ -217,10 +219,10 @@ URL: ${r.url}`
     }
 }
 
-async function searchDuckDuckGoWithDeps(query, axiosInstance) {
+async function searchDuckDuckGoWithDeps(query, httpClient) {
     try {
         const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
-        const res = await axiosInstance.get(url);
+        const res = await httpClient.get(url);
 
         const topics = res.data.RelatedTopics || [];
         const flattened = topics.flatMap(t => t.Topics || t);
@@ -348,6 +350,9 @@ function truncate(text, maxLength) {
 
 async function streamToString(stream) {
     if (typeof stream === 'string') return stream;
+    if (typeof stream === 'object' && stream !== null && !stream[Symbol.asyncIterator]) {
+        return JSON.stringify(stream);
+    }
     const chunks = [];
     for await (const chunk of stream) {
         chunks.push(typeof chunk === 'string'
@@ -419,4 +424,87 @@ function getModelOptions(model) {
         ...defaults,
         ...cfg
     };
+}
+
+function createHttpClient({ baseURL, timeout = DEFAULT_REQUEST_TIMEOUT_MS } = {}) {
+    return {
+        post: async (resource, data) => requestJson({
+            url: resolveRequestUrl(baseURL, resource),
+            method: 'POST',
+            json: data,
+            timeout
+        }),
+        get: async (resource) => requestJson({
+            url: resolveRequestUrl(baseURL, resource),
+            method: 'GET',
+            timeout
+        })
+    };
+}
+
+function resolveRequestUrl(baseURL, resource) {
+    if (/^https?:\/\//i.test(resource)) {
+        return resource;
+    }
+
+    if (!baseURL) {
+        return resource;
+    }
+
+    return new URL(resource, ensureTrailingSlash(baseURL)).toString();
+}
+
+function ensureTrailingSlash(url) {
+    return url.endsWith('/') ? url : `${url}/`;
+}
+
+async function requestJson({ url, method, json, timeout }) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    try {
+        const response = await fetch(url, {
+            method,
+            headers: json ? { 'content-type': 'application/json' } : undefined,
+            body: json ? JSON.stringify(json) : undefined,
+            signal: controller.signal
+        });
+
+        const data = await parseResponseBody(response);
+
+        if (!response.ok) {
+            const error = new Error(`Request failed with status ${response.status}`);
+            error.response = {
+                status: response.status,
+                data
+            };
+            throw error;
+        }
+
+        return { data };
+    } catch (err) {
+        if (err.name === 'AbortError') {
+            const timeoutError = new Error(`Request timed out after ${timeout}ms`);
+            timeoutError.cause = err;
+            throw timeoutError;
+        }
+
+        throw err;
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
+async function parseResponseBody(response) {
+    const text = await response.text();
+
+    if (!text) {
+        return null;
+    }
+
+    try {
+        return JSON.parse(text);
+    } catch {
+        return text;
+    }
 }
