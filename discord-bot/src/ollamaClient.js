@@ -7,7 +7,6 @@ import { fileURLToPath } from 'url';
 import { decisionPrompt } from './decisionPrompt.js';
 import { SYSTEM_PROMPT } from './systemPrompt.js';
 
-const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY });
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const MODEL_CONFIG_CANDIDATES = [
     path.resolve(MODULE_DIR, '../config/models.yml'),
@@ -27,8 +26,16 @@ try {
     console.warn(`Model config load failed. Using defaults. ${err.message}`);
 }
 
+function createTavilyClient(apiKey = process.env.TAVILY_API_KEY) {
+    if (!apiKey) {
+        return null;
+    }
+
+    return tavily({ apiKey });
+}
+
 // デフォルトの検索関数
-const defaultSearchFn = async (plan) => executeSearchWithDeps(plan, tvly, createHttpClient());
+const defaultSearchFn = async (plan) => executeSearchWithDeps(plan, createTavilyClient(), createHttpClient());
 
 export default function createOllamaClient({
     baseURL = 'http://ollama:11434',
@@ -205,6 +212,11 @@ export async function executeSearchWithDeps(plan, tavilyClient, httpClient) {
 
 export async function searchTavilyWithDeps(query, tavilyClient) {
     try {
+        if (!tavilyClient?.search) {
+            console.warn("Tavily search skipped because TAVILY_API_KEY is not configured.");
+            return "Tavily検索に失敗しました。";
+        }
+
         const response = await tavilyClient.search(query, {
             searchDepth: "advanced",
             maxResults: 5,

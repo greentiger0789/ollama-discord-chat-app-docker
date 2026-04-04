@@ -77,6 +77,12 @@ describe("ollamaClient HTTP helpers", () => {
 });
 
 describe("ollamaClient search formatting", () => {
+    test("searchTavilyWithDeps should handle a missing Tavily client gracefully", async () => {
+        const result = await searchTavilyWithDeps("missing client", null);
+
+        assert.equal(result, "Tavily検索に失敗しました。");
+    });
+
     test("searchDuckDuckGoWithDeps should flatten nested RelatedTopics", async () => {
         const result = await searchDuckDuckGoWithDeps("nested topic", {
             get: async () => ({
