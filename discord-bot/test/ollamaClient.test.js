@@ -1,11 +1,10 @@
-import axios from "axios";
 import assert from "node:assert/strict";
 import test from "node:test";
 
 import createOllamaClient from "../src/ollamaClient.js";
 
 /* ================================
-   axios モック
+   HTTP クライアントモック
 ================================ */
 
 const mockPost = async () => ({
@@ -16,9 +15,10 @@ const mockPost = async () => ({
     }
 });
 
-axios.create = () => ({
-    post: mockPost
-});
+const mockHttpClient = {
+    post: mockPost,
+    get: async () => ({ data: {} })
+};
 
 /* ================================
    基本応答テスト
@@ -27,7 +27,8 @@ axios.create = () => ({
 test("generate() should return assistant response", async () => {
 
     const client = createOllamaClient({
-        baseURL: "http://mock-ollama"
+        baseURL: "http://mock-ollama",
+        httpClient: mockHttpClient
     });
 
     const result = await client.generate({
@@ -44,7 +45,7 @@ test("generate() should return assistant response", async () => {
 
 test("generate() works with history", async () => {
 
-    const client = createOllamaClient();
+    const client = createOllamaClient({ httpClient: mockHttpClient });
 
     const result = await client.generate({
         prompt: "続けて",
@@ -68,7 +69,7 @@ test("generate() handles long history safely", async () => {
         text: "テスト".repeat(200)
     }));
 
-    const client = createOllamaClient();
+    const client = createOllamaClient({ httpClient: mockHttpClient });
 
     const result = await client.generate({
         prompt: "長文テスト",
