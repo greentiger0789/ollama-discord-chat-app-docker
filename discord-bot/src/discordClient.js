@@ -36,27 +36,44 @@ const commands = [
     }
 ];
 
-export async function registerCommands() {
-    try {
-        const app = await client.application?.fetch();
-        const appId = app.id;
+export function createRegisterCommands({
+    client: discordClient = client,
+    restClient = rest,
+    guildId = GUILD_ID,
+    routes = Routes,
+    commandList = commands
+} = {}) {
+    return async function registerCommands() {
+        try {
+            const app = typeof discordClient.application?.fetch === 'function'
+                ? await discordClient.application.fetch()
+                : discordClient.application;
+            const appId = app?.id;
 
-        if (GUILD_ID && /^[0-9]+$/.test(GUILD_ID)) {
-            await rest.put(
-                Routes.applicationGuildCommands(appId, GUILD_ID),
-                { body: commands }
-            );
-            console.log('Registered commands to guild', GUILD_ID);
-        } else {
-            await rest.put(
-                Routes.applicationCommands(appId),
-                { body: commands }
+            if (!appId) {
+                throw new Error('Discord application is not ready');
+            }
+
+            if (guildId && /^[0-9]+$/.test(guildId)) {
+                await restClient.put(
+                    routes.applicationGuildCommands(appId, guildId),
+                    { body: commandList }
+                );
+                console.log('Registered commands to guild', guildId);
+                return;
+            }
+
+            await restClient.put(
+                routes.applicationCommands(appId),
+                { body: commandList }
             );
             console.log('Registered global commands');
+        } catch (err) {
+            console.error('Failed to register commands', err);
         }
-    } catch (err) {
-        console.error('Failed to register commands', err);
-    }
+    };
 }
+
+export const registerCommands = createRegisterCommands();
 
 export { client, DISCORD_TOKEN };

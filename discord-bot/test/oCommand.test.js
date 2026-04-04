@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test, { after, before, describe } from "node:test";
 
+async function importFreshThreadManager() {
+    const modulePath = new URL("../src/threadManager.js", import.meta.url);
+    return await import(`${modulePath.href}?t=${Date.now()}-${Math.random()}`);
+}
+
 describe("oCommand", () => {
     let createHandleOCommand;
     let handleOCommand;
@@ -102,6 +107,45 @@ describe("oCommand", () => {
 
             await mockHandleOCommand(mockInteraction);
             assert.equal(capturedPrompt, "テスト用プロンプト", "Should get prompt from interaction options");
+        });
+
+        test("should pass only prior history to generateResponse and persist the full exchange", async () => {
+            const threadManager = await importFreshThreadManager();
+            let capturedHistory = null;
+
+            const thread = {
+                id: "thread-history-1",
+                send: async () => ({ edit: async () => { } })
+            };
+
+            const mockInteraction = {
+                options: { getString: () => "初回プロンプト" },
+                deferReply: async () => { },
+                followUp: async () => ({
+                    startThread: async () => thread
+                }),
+                user: { username: "testuser" }
+            };
+
+            const mockHandleOCommand = createHandleOCommand({
+                generateResponse: async (_prompt, history) => {
+                    capturedHistory = history;
+                    return "テスト応答";
+                },
+                getThreadHistory: threadManager.getThreadHistory,
+                addToThreadHistory: threadManager.addToThreadHistory,
+                initializeThread: threadManager.initializeThread,
+                buildMaidThinkingMessage: () => "思考中...",
+                sendSplitMessage: async () => { },
+            });
+
+            await mockHandleOCommand(mockInteraction);
+
+            assert.deepEqual(capturedHistory, []);
+            assert.deepEqual(threadManager.getThreadHistory(thread.id), [
+                { role: "user", text: "初回プロンプト" },
+                { role: "assistant", text: "テスト応答" }
+            ]);
         });
     });
 

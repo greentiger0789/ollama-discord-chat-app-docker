@@ -288,9 +288,14 @@ models:
 ## テスト
 
 ```bash
-# Discord Bot 内でテスト実行
-cd discord-bot
-npm test
+# プロジェクトルートで実行（ホスト側から）
+docker compose run --build --rm --no-deps discord-bot npm test
+```
+
+起動済みの `discord-bot` コンテナに対して手早く再実行したい場合は、以下でも実行できます。
+
+```bash
+docker compose exec discord-bot npm test
 ```
 
 テストカバレッジ：
@@ -400,8 +405,9 @@ deploy:
 
 ### テストが失敗する
 
-- Node.js v24以上を使用しているか確認
-- `npm install` を実行して依存関係をインストール
+- ホスト側から実行する場合は `docker compose run --build --rm --no-deps discord-bot npm test` を使用
+- 起動済みコンテナで再実行する場合は `docker compose exec discord-bot npm test` を使用
+- コンテナ内で直接実行する場合は Node.js v24以上を使用し、`npm install` を実行して依存関係をインストール
 
 ## 依存関係
 
@@ -412,7 +418,7 @@ deploy:
 | `discord.js` | ^14.25.1 | Discord API クライアント |
 | `@discordjs/rest` | ^2.6.0 | Discord REST API |
 | `discord-api-types` | ^0.38.40 | Discord API 型定義 |
-| `axios` | ^1.13.5 | HTTP クライアント |
+| `node-fetch` | ^3.3.2 | HTTP クライアント |
 | `dotenv` | ^16.4.7 | 環境変数管理 |
 | `@tavily/core` | ^0.7.2 | Tavily 検索 API |
 | `js-yaml` | ^4.1.1 | YAML パーサー |

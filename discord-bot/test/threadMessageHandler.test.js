@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import test, { after, before, describe } from "node:test";
 import { handleThreadMessage } from "../src/handlers/threadMessageHandler.js";
 
+async function importFreshThreadManager() {
+    const modulePath = new URL("../src/threadManager.js", import.meta.url);
+    return await import(`${modulePath.href}?t=${Date.now()}-${Math.random()}`);
+}
+
 describe("threadMessageHandler", () => {
     let originalConsoleError;
 
@@ -247,14 +252,14 @@ describe("threadMessageHandler", () => {
         });
 
         test("should handle sendSplitMessage errors gracefully", async () => {
-            let sendCalled = false;
+            const sentContents = [];
 
             const mockMessage = {
                 channel: {
                     isThread: () => true,
                     id: "thread-error",
-                    send: async () => {
-                        sendCalled = true;
+                    send: async (content) => {
+                        sentContents.push(content);
                         return { edit: async () => { } };
                     }
                 },
@@ -277,8 +282,12 @@ describe("threadMessageHandler", () => {
             // エラーがスローされないことを確認
             await handleThreadMessage(mockMessage, deps);
 
-            // エラーハンドリングでsendが呼ばれることを確認
-            assert.equal(sendCalled, true, "Should call channel.send for error handling");
+            assert.equal(sentContents.length, 2, "Should send both the thinking message and the error message");
+            assert.equal(sentContents[0], "🧹 考え中...", "Should send the thinking message first");
+            assert.ok(
+                typeof sentContents[1] === "string" && sentContents[1].includes("エラー"),
+                "Should send an error message after sendSplitMessage fails"
+            );
         });
     });
 
@@ -379,6 +388,54 @@ describe("threadMessageHandler", () => {
             assert.equal(addedMessages.length, 2, "Should add two messages to history");
             assert.deepEqual(addedMessages[0], { role: "user", text: "順序テスト" }, "First message should be user message");
             assert.deepEqual(addedMessages[1], { role: "assistant", text: "順序応答" }, "Second message should be assistant message");
+        });
+
+        test("should pass only prior history to generateResponse when using the real thread manager", async () => {
+            const threadManager = await importFreshThreadManager();
+            const threadId = "thread-history-real";
+            let capturedHistory = null;
+
+            threadManager.initializeThread(threadId, "以前のメッセージ");
+            threadManager.addToThreadHistory(threadId, {
+                role: "assistant",
+                text: "以前の応答"
+            });
+
+            const mockMessage = {
+                channel: {
+                    isThread: () => true,
+                    id: threadId,
+                    send: async () => ({ edit: async () => { } })
+                },
+                author: {
+                    bot: false
+                },
+                content: "新しいメッセージ"
+            };
+
+            const deps = {
+                buildMaidThinkingMessage: () => "🧹 考え中...",
+                sendSplitMessage: async () => { },
+                generateResponse: async (_content, history) => {
+                    capturedHistory = history;
+                    return "新しい応答";
+                },
+                addToThreadHistory: threadManager.addToThreadHistory,
+                getThreadHistory: threadManager.getThreadHistory
+            };
+
+            await handleThreadMessage(mockMessage, deps);
+
+            assert.deepEqual(capturedHistory, [
+                { role: "user", text: "以前のメッセージ" },
+                { role: "assistant", text: "以前の応答" }
+            ]);
+            assert.deepEqual(threadManager.getThreadHistory(threadId), [
+                { role: "user", text: "以前のメッセージ" },
+                { role: "assistant", text: "以前の応答" },
+                { role: "user", text: "新しいメッセージ" },
+                { role: "assistant", text: "新しい応答" }
+            ]);
         });
     });
 

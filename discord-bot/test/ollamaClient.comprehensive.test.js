@@ -475,6 +475,51 @@ describe("generate() model options", () => {
 
         assert.equal(capturedModel, "custom-model");
     });
+
+    test("should load model-specific options from config", async () => {
+        let callCount = 0;
+        let capturedOptions = null;
+
+        mockPostHandler = async (_url, data) => {
+            callCount++;
+
+            if (callCount === 1) {
+                return {
+                    data: {
+                        message: {
+                            content: JSON.stringify({
+                                needSearch: false,
+                                engine: "tavily",
+                                searchQuery: ""
+                            })
+                        }
+                    }
+                };
+            }
+
+            capturedOptions = data.options;
+            return {
+                data: {
+                    message: {
+                        content: "設定込みの応答"
+                    }
+                }
+            };
+        };
+
+        const client = buildClient();
+        await client.generate({
+            model: "qwen3.5:cloud",
+            prompt: "設定テスト",
+            history: []
+        });
+
+        assert.equal(capturedOptions.num_ctx, 131072);
+        assert.equal(capturedOptions.num_predict, 4096);
+        assert.equal(capturedOptions.num_keep, 2048);
+        assert.equal(capturedOptions.mirostat, 2);
+        assert.equal(capturedOptions.repeat_penalty, 1.1);
+    });
 });
 
 /* ================================

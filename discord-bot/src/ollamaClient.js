@@ -3,23 +3,39 @@ import fs from 'fs';
 import yaml from 'js-yaml';
 import fetch from 'node-fetch';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { decisionPrompt } from './decisionPrompt.js';
 import { SYSTEM_PROMPT } from './systemPrompt.js';
 
-const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY });
-const MODEL_CONFIG_PATH = path.resolve('./config/models.yaml');
+const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
+const MODEL_CONFIG_CANDIDATES = [
+    path.resolve(MODULE_DIR, '../config/models.yml'),
+    path.resolve(MODULE_DIR, '../config/models.yaml')
+];
 const DEFAULT_REQUEST_TIMEOUT_MS = 300000;
 let MODEL_CONFIG = {};
 
 try {
+    const MODEL_CONFIG_PATH = MODEL_CONFIG_CANDIDATES.find((candidate) => fs.existsSync(candidate));
+    if (!MODEL_CONFIG_PATH) {
+        throw new Error(`No config found in: ${MODEL_CONFIG_CANDIDATES.join(', ')}`);
+    }
     const file = fs.readFileSync(MODEL_CONFIG_PATH, 'utf8');
     MODEL_CONFIG = yaml.load(file)?.models || {};
 } catch (err) {
-    console.warn("Model config load failed. Using defaults.");
+    console.warn(`Model config load failed. Using defaults. ${err.message}`);
+}
+
+function createTavilyClient(apiKey = process.env.TAVILY_API_KEY) {
+    if (!apiKey) {
+        return null;
+    }
+
+    return tavily({ apiKey });
 }
 
 // デフォルトの検索関数
-const defaultSearchFn = async (plan) => executeSearchWithDeps(plan, tvly, createHttpClient());
+const defaultSearchFn = async (plan) => executeSearchWithDeps(plan, createTavilyClient(), createHttpClient());
 
 export default function createOllamaClient({
     baseURL = 'http://ollama:11434',
@@ -188,14 +204,19 @@ async function decideSearchPlan(client, model, prompt) {
 /* 🌐 検索（依存関係注入版）
 /* ===================================================== */
 
-async function executeSearchWithDeps(plan, tavilyClient, httpClient) {
+export async function executeSearchWithDeps(plan, tavilyClient, httpClient) {
     if (!plan.searchQuery) return "検索クエリが無効です。";
     if (plan.engine === "ddg") return await searchDuckDuckGoWithDeps(plan.searchQuery, httpClient);
     return await searchTavilyWithDeps(plan.searchQuery, tavilyClient);
 }
 
-async function searchTavilyWithDeps(query, tavilyClient) {
+export async function searchTavilyWithDeps(query, tavilyClient) {
     try {
+        if (!tavilyClient?.search) {
+            console.warn("Tavily search skipped because TAVILY_API_KEY is not configured.");
+            return "Tavily検索に失敗しました。";
+        }
+
         const response = await tavilyClient.search(query, {
             searchDepth: "advanced",
             maxResults: 5,
@@ -219,7 +240,7 @@ URL: ${r.url}`
     }
 }
 
-async function searchDuckDuckGoWithDeps(query, httpClient) {
+export async function searchDuckDuckGoWithDeps(query, httpClient) {
     try {
         const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
         const res = await httpClient.get(url);
@@ -341,7 +362,7 @@ function stripThinkTags(text) {
         .trim();
 }
 
-function truncate(text, maxLength) {
+export function truncate(text, maxLength) {
     if (!text) return '';
     return text.length > maxLength
         ? text.slice(0, maxLength) + "..."
@@ -426,18 +447,20 @@ function getModelOptions(model) {
     };
 }
 
-function createHttpClient({ baseURL, timeout = DEFAULT_REQUEST_TIMEOUT_MS } = {}) {
+export function createHttpClient({ baseURL, timeout = DEFAULT_REQUEST_TIMEOUT_MS, fetchImpl = fetch } = {}) {
     return {
         post: async (resource, data) => requestJson({
             url: resolveRequestUrl(baseURL, resource),
             method: 'POST',
             json: data,
-            timeout
+            timeout,
+            fetchImpl
         }),
         get: async (resource) => requestJson({
             url: resolveRequestUrl(baseURL, resource),
             method: 'GET',
-            timeout
+            timeout,
+            fetchImpl
         })
     };
 }
@@ -458,12 +481,12 @@ function ensureTrailingSlash(url) {
     return url.endsWith('/') ? url : `${url}/`;
 }
 
-async function requestJson({ url, method, json, timeout }) {
+export async function requestJson({ url, method, json, timeout, fetchImpl = fetch }) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     try {
-        const response = await fetch(url, {
+        const response = await fetchImpl(url, {
             method,
             headers: json ? { 'content-type': 'application/json' } : undefined,
             body: json ? JSON.stringify(json) : undefined,
@@ -495,7 +518,7 @@ async function requestJson({ url, method, json, timeout }) {
     }
 }
 
-async function parseResponseBody(response) {
+export async function parseResponseBody(response) {
     const text = await response.text();
 
     if (!text) {

@@ -1,10 +1,15 @@
 name: CI
 
 on:
-  push:
-    branches:
-      - "**"
   pull_request:
+    branches:
+      - main
+      - master
+    types:
+      - opened
+      - synchronize
+      - reopened
+  push:
     branches:
       - main
       - master
@@ -15,7 +20,7 @@ env:
 
 jobs:
   test:
-    name: Test (Node.js ${{ env.NODE_VERSION }})
+    name: Test (Node.js 24)
     runs-on: ubuntu-latest
 
     defaults:

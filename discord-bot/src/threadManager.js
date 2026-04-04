@@ -1,24 +1,33 @@
 const threadHistory = new Map();
 
+function cloneMessage(message) {
+    return { ...message };
+}
+
+function cloneHistory(history = []) {
+    return history.map(cloneMessage);
+}
+
 export function getThreadHistory(threadId) {
-    return threadHistory.get(threadId) || [];
+    return cloneHistory(threadHistory.get(threadId) || []);
 }
 
 export function setThreadHistory(threadId, history) {
-    threadHistory.set(threadId, history);
+    threadHistory.set(threadId, cloneHistory(history));
 }
 
 export function addToThreadHistory(threadId, message) {
-    const history = getThreadHistory(threadId);
-    history.push(message);
+    const history = [...getThreadHistory(threadId), cloneMessage(message)];
     setThreadHistory(threadId, history);
-    return history;
+    return cloneHistory(history);
 }
 
 export function initializeThread(threadId, initialMessage) {
-    const history = [{ role: 'user', text: initialMessage }];
+    const history = initialMessage
+        ? [{ role: 'user', text: initialMessage }]
+        : [];
     setThreadHistory(threadId, history);
-    return history;
+    return cloneHistory(history);
 }
 
 export function clearThreadHistory(threadId) {
