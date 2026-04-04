@@ -4,7 +4,7 @@ import test, { beforeEach, describe } from "node:test";
 // テストごとにモジュールを再インポートして状態をリセット
 async function importFreshThreadManager() {
     const modulePath = new URL("../src/threadManager.js", import.meta.url);
-    const module = await import(`${modulePath.href}?t=${Date.now()}`);
+    const module = await import(`${modulePath.href}?t=${Date.now()}-${Math.random()}`);
     return module;
 }
 
@@ -31,6 +31,20 @@ describe("threadManager", () => {
             ]);
             const history = threadManager.getThreadHistory("thread-1");
             assert.deepEqual(history, [{ role: "user", text: "hello" }]);
+        });
+
+        test("returns a defensive copy of stored history", async () => {
+            threadManager.setThreadHistory("thread-copy", [
+                { role: "user", text: "hello" }
+            ]);
+
+            const history = threadManager.getThreadHistory("thread-copy");
+            history[0].text = "mutated";
+            history.push({ role: "assistant", text: "extra" });
+
+            assert.deepEqual(threadManager.getThreadHistory("thread-copy"), [
+                { role: "user", text: "hello" }
+            ]);
         });
     });
 
@@ -84,6 +98,22 @@ describe("threadManager", () => {
             assert.deepEqual(result, [
                 { role: "user", text: "first" },
                 { role: "assistant", text: "response" }
+            ]);
+        });
+
+        test("does not mutate previously returned history arrays", async () => {
+            threadManager.setThreadHistory("thread-4-copy", [
+                { role: "user", text: "first" }
+            ]);
+
+            const before = threadManager.getThreadHistory("thread-4-copy");
+            threadManager.addToThreadHistory("thread-4-copy", {
+                role: "assistant",
+                text: "response"
+            });
+
+            assert.deepEqual(before, [
+                { role: "user", text: "first" }
             ]);
         });
     });

@@ -37,7 +37,9 @@ export function createHandleOCommand(deps = defaultDeps) {
                 autoArchiveDuration: 60
             });
 
-            initializeThread(thread.id, prompt);
+            initializeThread(thread.id);
+            const history = getThreadHistory(thread.id);
+            addToThreadHistory(thread.id, { role: 'user', text: prompt });
 
             await thread.send(`**プロンプト:** ${prompt}`);
 
@@ -45,7 +47,7 @@ export function createHandleOCommand(deps = defaultDeps) {
 
             const responseText = await generateResponse(
                 prompt,
-                getThreadHistory(thread.id)
+                history
             );
 
             addToThreadHistory(thread.id, { role: 'assistant', text: responseText });
