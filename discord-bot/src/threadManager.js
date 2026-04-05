@@ -23,9 +23,7 @@ export function addToThreadHistory(threadId, message) {
 }
 
 export function initializeThread(threadId, initialMessage) {
-    const history = initialMessage
-        ? [{ role: 'user', text: initialMessage }]
-        : [];
+    const history = initialMessage ? [{ role: 'user', text: initialMessage }] : [];
     setThreadHistory(threadId, history);
     return cloneHistory(history);
 }

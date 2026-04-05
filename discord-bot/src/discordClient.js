@@ -1,6 +1,6 @@
 import { REST } from '@discordjs/rest';
-import { Routes } from 'discord-api-types/v10';
 import { Client, GatewayIntentBits } from 'discord.js';
+import { Routes } from 'discord-api-types/v10';
 import './loadEnv.js';
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
@@ -45,9 +45,10 @@ export function createRegisterCommands({
 } = {}) {
     return async function registerCommands() {
         try {
-            const app = typeof discordClient.application?.fetch === 'function'
-                ? await discordClient.application.fetch()
-                : discordClient.application;
+            const app =
+                typeof discordClient.application?.fetch === 'function'
+                    ? await discordClient.application.fetch()
+                    : discordClient.application;
             const appId = app?.id;
 
             if (!appId) {
@@ -55,18 +56,14 @@ export function createRegisterCommands({
             }
 
             if (guildId && /^[0-9]+$/.test(guildId)) {
-                await restClient.put(
-                    routes.applicationGuildCommands(appId, guildId),
-                    { body: commandList }
-                );
+                await restClient.put(routes.applicationGuildCommands(appId, guildId), {
+                    body: commandList
+                });
                 console.log('Registered commands to guild', guildId);
                 return;
             }
 
-            await restClient.put(
-                routes.applicationCommands(appId),
-                { body: commandList }
-            );
+            await restClient.put(routes.applicationCommands(appId), { body: commandList });
             console.log('Registered global commands');
         } catch (err) {
             console.error('Failed to register commands', err);
