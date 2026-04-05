@@ -201,6 +201,8 @@ cp .env.example .env
 docker compose up -d
 ```
 
+`discord-bot` はホットリロード対応です。`index.js`、`src/`、`config/`、`.env` を更新すると自動で再起動され、`package.json` など依存関係の定義を変えた場合もコンテナ内で再インストールしてから再起動されます。
+
 ### 直接 Node.js で実行
 
 ```bash
@@ -208,7 +210,10 @@ docker compose up -d
 cd discord-bot
 npm install
 
-# 実行
+# ホットリロード付きで実行
+npm run dev
+
+# 通常実行
 npm start
 ```
 
@@ -409,21 +414,7 @@ deploy:
 - 起動済みコンテナで再実行する場合は `docker compose exec discord-bot npm test` を使用
 - コンテナ内で直接実行する場合は Node.js v24以上を使用し、`npm install` を実行して依存関係をインストール
 
-## 依存関係
-
-### 本体依存関係
-
-| パッケージ | バージョン | 用途 |
-|-----------|-----------|------|
-| `discord.js` | ^14.25.1 | Discord API クライアント |
-| `@discordjs/rest` | ^2.6.0 | Discord REST API |
-| `discord-api-types` | ^0.38.40 | Discord API 型定義 |
-| `node-fetch` | ^3.3.2 | HTTP クライアント |
-| `dotenv` | ^16.4.7 | 環境変数管理 |
-| `@tavily/core` | ^0.7.2 | Tavily 検索 API |
-| `js-yaml` | ^4.1.1 | YAML パーサー |
-
-### ランタイム
+## ランタイム
 
 - **Node.js**: v24以上
 - **pnpm**: パッケージマネージャ（Docker内で使用）
