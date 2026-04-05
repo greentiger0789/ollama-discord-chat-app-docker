@@ -7,11 +7,10 @@ import { APP_DIR, readEnvFile } from './src/env.js';
 const CHILD_COMMAND = ['node', 'index.js'];
 const POLL_INTERVAL_MS = 1000;
 const MANIFEST_STATE_FILE = path.join(APP_DIR, 'node_modules', '.manifest.hash');
+const LOCK_FILES = ['package-lock.json', 'npm-shrinkwrap.json'];
 const MANIFEST_FILES = [
     'package.json',
-    'package-lock.json',
-    'pnpm-lock.yaml',
-    'npm-shrinkwrap.json'
+    ...LOCK_FILES
 ];
 const WATCH_ROOTS = [
     'index.js',
@@ -171,6 +170,14 @@ function runCommand(command, args) {
     });
 }
 
+function hasLockFile() {
+    return LOCK_FILES.some((relativePath) => fs.existsSync(path.join(APP_DIR, relativePath)));
+}
+
+function getInstallCommandArgs() {
+    return hasLockFile() ? ['ci'] : ['install'];
+}
+
 async function ensureDependencies() {
     const manifestHash = computeManifestHash();
 
@@ -182,7 +189,7 @@ async function ensureDependencies() {
         console.log('[hot-reload] node_modules is missing. Installing dependencies...');
 
         try {
-            await runCommand('pnpm', ['install', '--no-frozen-lockfile']);
+            await runCommand('npm', getInstallCommandArgs());
             saveManifestHash(manifestHash);
             return true;
         } catch (error) {
@@ -205,7 +212,7 @@ async function ensureDependencies() {
     console.log('[hot-reload] Dependency manifest changed. Reinstalling dependencies...');
 
     try {
-        await runCommand('pnpm', ['install', '--no-frozen-lockfile']);
+        await runCommand('npm', getInstallCommandArgs());
         saveManifestHash(manifestHash);
         return true;
     } catch (error) {

@@ -12,3 +12,5 @@
 
 .env
 .codex
+discord-bot/node_modules/
+npm-debug.log*
