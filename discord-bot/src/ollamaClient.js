@@ -1,9 +1,9 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { tavily } from '@tavily/core';
-import fs from 'fs';
 import yaml from 'js-yaml';
 import fetch from 'node-fetch';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { decisionPrompt } from './decisionPrompt.js';
 import { SYSTEM_PROMPT } from './systemPrompt.js';
 
@@ -13,10 +13,12 @@ const MODEL_CONFIG_CANDIDATES = [
     path.resolve(MODULE_DIR, '../config/models.yaml')
 ];
 const DEFAULT_REQUEST_TIMEOUT_MS = 300000;
+const THINKING_RETRY_MIN_BUMP = 2048;
+const THINKING_RETRY_MAX_NUM_PREDICT = 16384;
 let MODEL_CONFIG = {};
 
 try {
-    const MODEL_CONFIG_PATH = MODEL_CONFIG_CANDIDATES.find((candidate) => fs.existsSync(candidate));
+    const MODEL_CONFIG_PATH = MODEL_CONFIG_CANDIDATES.find(candidate => fs.existsSync(candidate));
     if (!MODEL_CONFIG_PATH) {
         throw new Error(`No config found in: ${MODEL_CONFIG_CANDIDATES.join(', ')}`);
     }
@@ -35,18 +37,17 @@ function createTavilyClient(apiKey = process.env.TAVILY_API_KEY) {
 }
 
 // デフォルトの検索関数
-const defaultSearchFn = async (plan) => executeSearchWithDeps(plan, createTavilyClient(), createHttpClient());
+const defaultSearchFn = async plan =>
+    executeSearchWithDeps(plan, createTavilyClient(), createHttpClient());
 
 export default function createOllamaClient({
     baseURL = 'http://ollama:11434',
     searchFn = defaultSearchFn,
     httpClient = createHttpClient({ baseURL, timeout: DEFAULT_REQUEST_TIMEOUT_MS })
 } = {}) {
-
     const client = httpClient;
 
     async function generate({ model = 'qwen3.5:9b', prompt = '', history = [] } = {}) {
-
         /* =========================================
            ① トークン概算（かなり安全寄り）
         ========================================= */
@@ -62,8 +63,8 @@ export default function createOllamaClient({
             }, 0);
         }
 
-        const MAX_CONTEXT_TOKENS = 12000;   // num_ctx 16384を考慮
-        const SAFETY_MARGIN = 2000;         // 推論thinking余白
+        const MAX_CONTEXT_TOKENS = 12000; // num_ctx 16384を考慮
+        const SAFETY_MARGIN = 2000; // 推論thinking余白
         const LIMIT = MAX_CONTEXT_TOKENS - SAFETY_MARGIN;
 
         let processedHistory = [...history];
@@ -76,7 +77,6 @@ export default function createOllamaClient({
         const promptTokens = estimateTokensFromText(prompt);
 
         if (historyTokens + promptTokens > LIMIT && history.length > 1) {
-
             // 🔥 最新userは除外
             const oldHistory = history.slice(0, -1);
 
@@ -84,7 +84,7 @@ export default function createOllamaClient({
 
             processedHistory = [
                 {
-                    role: "assistant",
+                    role: 'assistant',
                     text: `【過去の会話要約】\n${summary}`
                 },
                 history[history.length - 1]
@@ -114,9 +114,10 @@ export default function createOllamaClient({
             })),
             {
                 role: 'user',
-                content: plan.needSearch && searchResults
-                    ? buildAugmentedPrompt(prompt, searchResults)
-                    : prompt
+                content:
+                    plan.needSearch && searchResults
+                        ? buildAugmentedPrompt(prompt, searchResults)
+                        : prompt
             }
         ];
 
@@ -126,23 +127,30 @@ export default function createOllamaClient({
 
         try {
             const modelOptions = getModelOptions(model);
-            const res = await client.post('/api/chat', {
+            const { content, data } = await requestAssistantContentWithRetry(client, {
                 model,
                 messages: finalMessages,
                 stream: false,
                 options: modelOptions
             });
 
-            const content = extractAssistantMessage(res.data);
-
             if (content !== null) return content;
 
-            console.error("Unknown response format:", res.data);
-            return "回答形式を解析できませんでした。";
+            if (hasThinkingOnlyResponse(data)) {
+                console.warn(
+                    'Assistant response exhausted in thinking mode:',
+                    summarizeResponseShape(data)
+                );
+                return '回答本文を取得できませんでした。';
+            }
 
+            console.error('Unknown response format:', summarizeResponseShape(data));
+            return '回答形式を解析できませんでした。';
         } catch (err) {
             if (err.response?.data) {
-                try { return await streamToString(err.response.data); } catch { }
+                try {
+                    return await streamToString(err.response.data);
+                } catch {}
             }
             throw err;
         }
@@ -154,47 +162,53 @@ export default function createOllamaClient({
 /* ===================================================== */
 
 async function decideSearchPlan(client, model, prompt) {
-
     const forceKeywords = [
-        "今日", "明日", "現在", "最新",
-        "天気", "価格", "株価", "ニュース",
-        "為替", "リアルタイム"
+        '今日',
+        '明日',
+        '現在',
+        '最新',
+        '天気',
+        '価格',
+        '株価',
+        'ニュース',
+        '為替',
+        'リアルタイム'
     ];
 
     const hasForceKeyword = forceKeywords.some(k => prompt.includes(k));
 
     try {
-        const res = await client.post('/api/chat', {
-            model,
-            messages: [
-                { role: 'system', content: decisionPrompt },
-                { role: 'user', content: `質問: ${prompt}` }
-            ],
-            format: 'json',
-            stream: false,
-            options: {
-                temperature: 0,
-                num_predict: 200
-            }
-        });
+        const res = await postChat(
+            client,
+            {
+                model,
+                messages: [
+                    { role: 'system', content: decisionPrompt },
+                    { role: 'user', content: `質問: ${prompt}` }
+                ],
+                format: 'json',
+                stream: false,
+                options: {
+                    temperature: 0,
+                    num_predict: 200
+                }
+            },
+            { think: false }
+        );
 
-        const raw =
-            res.data?.message?.content ||
-            res.data?.choices?.[0]?.message?.content ||
-            "{}";
+        const raw = res.data?.message?.content || res.data?.choices?.[0]?.message?.content || '{}';
 
         const parsed = safeJsonParse(raw);
 
         return {
             needSearch: hasForceKeyword || !!parsed.needSearch,
-            engine: parsed.engine === "ddg" ? "ddg" : "tavily",
+            engine: parsed.engine === 'ddg' ? 'ddg' : 'tavily',
             searchQuery: parsed.searchQuery || prompt
         };
-
     } catch {
         return {
             needSearch: hasForceKeyword,
-            engine: "tavily",
+            engine: 'tavily',
             searchQuery: prompt
         };
     }
@@ -205,38 +219,39 @@ async function decideSearchPlan(client, model, prompt) {
 /* ===================================================== */
 
 export async function executeSearchWithDeps(plan, tavilyClient, httpClient) {
-    if (!plan.searchQuery) return "検索クエリが無効です。";
-    if (plan.engine === "ddg") return await searchDuckDuckGoWithDeps(plan.searchQuery, httpClient);
+    if (!plan.searchQuery) return '検索クエリが無効です。';
+    if (plan.engine === 'ddg') return await searchDuckDuckGoWithDeps(plan.searchQuery, httpClient);
     return await searchTavilyWithDeps(plan.searchQuery, tavilyClient);
 }
 
 export async function searchTavilyWithDeps(query, tavilyClient) {
     try {
         if (!tavilyClient?.search) {
-            console.warn("Tavily search skipped because TAVILY_API_KEY is not configured.");
-            return "Tavily検索に失敗しました。";
+            console.warn('Tavily search skipped because TAVILY_API_KEY is not configured.');
+            return 'Tavily検索に失敗しました。';
         }
 
         const response = await tavilyClient.search(query, {
-            searchDepth: "advanced",
+            searchDepth: 'advanced',
             maxResults: 5,
             includeAnswer: false
         });
 
-        if (!response?.results?.length)
-            return "検索結果が見つかりませんでした。";
+        if (!response?.results?.length) return '検索結果が見つかりませんでした。';
 
-        const formatted = response.results.map(r =>
-            `タイトル: ${r.title}
+        const formatted = response.results
+            .map(
+                r =>
+                    `タイトル: ${r.title}
 内容: ${truncate(r.content, 500)}
 URL: ${r.url}`
-        ).join("\n\n");
+            )
+            .join('\n\n');
 
         return truncate(formatted, 4000);
-
     } catch (err) {
-        console.error("Tavily Error:", err.message);
-        return "Tavily検索に失敗しました。";
+        console.error('Tavily Error:', err.message);
+        return 'Tavily検索に失敗しました。';
     }
 }
 
@@ -252,13 +267,12 @@ export async function searchDuckDuckGoWithDeps(query, httpClient) {
             .filter(t => t.Text)
             .slice(0, 5)
             .map(t => t.Text)
-            .join("\n");
+            .join('\n');
 
-        return results || "検索結果が見つかりませんでした。";
-
+        return results || '検索結果が見つかりませんでした。';
     } catch (err) {
-        console.error("DDG Error:", err.message);
-        return "DuckDuckGo検索に失敗しました。";
+        console.error('DDG Error:', err.message);
+        return 'DuckDuckGo検索に失敗しました。';
     }
 }
 
@@ -317,7 +331,7 @@ function extractAssistantMessage(data) {
     if (data.message) {
         const { content } = data.message;
 
-        if (typeof content === "string") {
+        if (typeof content === 'string') {
             const cleaned = stripThinkTags(content).trim();
             if (cleaned.length > 0) {
                 return cleaned;
@@ -330,7 +344,7 @@ function extractAssistantMessage(data) {
     // ② OpenAI互換
     if (data.choices?.length) {
         const msg = data.choices[0]?.message;
-        if (typeof msg?.content === "string") {
+        if (typeof msg?.content === 'string') {
             const cleaned = stripThinkTags(msg.content).trim();
             if (cleaned.length > 0) {
                 return cleaned;
@@ -340,7 +354,7 @@ function extractAssistantMessage(data) {
     }
 
     // ③ generate互換
-    if (typeof data.response === "string") {
+    if (typeof data.response === 'string') {
         const cleaned = stripThinkTags(data.response).trim();
         if (cleaned.length > 0) {
             return cleaned;
@@ -348,6 +362,102 @@ function extractAssistantMessage(data) {
     }
 
     return null;
+}
+
+function hasThinkingOnlyResponse(data) {
+    const content = data?.message?.content;
+    const thinking = data?.message?.thinking;
+
+    return (
+        typeof content === 'string' &&
+        content.trim().length === 0 &&
+        typeof thinking === 'string' &&
+        thinking.trim().length > 0
+    );
+}
+
+function summarizeResponseShape(data) {
+    if (!data || typeof data !== 'object') {
+        return data;
+    }
+
+    return {
+        model: data.model,
+        created_at: data.created_at,
+        done: data.done,
+        done_reason: data.done_reason,
+        message: data.message
+            ? {
+                  role: data.message.role,
+                  contentLength:
+                      typeof data.message.content === 'string' ? data.message.content.length : null,
+                  thinkingLength:
+                      typeof data.message.thinking === 'string'
+                          ? data.message.thinking.length
+                          : null
+              }
+            : undefined,
+        choices: Array.isArray(data.choices) ? data.choices.length : undefined,
+        hasResponse: typeof data.response === 'string'
+    };
+}
+
+async function requestAssistantContentWithRetry(client, payload) {
+    const res = await postChat(client, payload, { think: true });
+    const content = extractAssistantMessage(res.data);
+
+    if (content !== null) {
+        return { content, data: res.data };
+    }
+
+    if (!shouldRetryThinkingOnlyResponse(res.data)) {
+        return { content: null, data: res.data };
+    }
+
+    const retryOptions = buildThinkingRetryOptions(payload.options);
+    if (!retryOptions) {
+        return { content: null, data: res.data };
+    }
+
+    console.warn('Assistant response exhausted in thinking mode, retrying:', {
+        ...summarizeResponseShape(res.data),
+        retry_num_predict: retryOptions.num_predict
+    });
+
+    const retryRes = await postChat(
+        client,
+        {
+            ...payload,
+            options: retryOptions
+        },
+        { think: true }
+    );
+
+    return {
+        content: extractAssistantMessage(retryRes.data),
+        data: retryRes.data
+    };
+}
+
+function shouldRetryThinkingOnlyResponse(data) {
+    return hasThinkingOnlyResponse(data) && data?.done_reason === 'length';
+}
+
+function buildThinkingRetryOptions(options = {}) {
+    const current = Number.isFinite(options?.num_predict) ? options.num_predict : 8192;
+    const next = Math.min(
+        Math.max(current * 2, current + THINKING_RETRY_MIN_BUMP),
+        THINKING_RETRY_MAX_NUM_PREDICT
+    );
+
+    if (next <= current) {
+        return null;
+    }
+
+    return {
+        ...options,
+        num_predict: next
+    };
 }
 
 /* ===================================================== */
@@ -364,9 +474,7 @@ function stripThinkTags(text) {
 
 export function truncate(text, maxLength) {
     if (!text) return '';
-    return text.length > maxLength
-        ? text.slice(0, maxLength) + "..."
-        : text;
+    return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
 }
 
 async function streamToString(stream) {
@@ -376,9 +484,7 @@ async function streamToString(stream) {
     }
     const chunks = [];
     for await (const chunk of stream) {
-        chunks.push(typeof chunk === 'string'
-            ? chunk
-            : chunk.toString('utf8'));
+        chunks.push(typeof chunk === 'string' ? chunk : chunk.toString('utf8'));
     }
     return chunks.join('');
 }
@@ -405,30 +511,34 @@ async function summarizeHistory(client, model, history) {
 
     const messages = [
         {
-            role: "system",
-            content: "以下の会話履歴を簡潔に要約してください。重要な事実・前提・未解決事項を保持してください。"
+            role: 'system',
+            content:
+                '以下の会話履歴を簡潔に要約してください。重要な事実・前提・未解決事項を保持してください。'
         },
         {
-            role: "user",
-            content: history.map(m => `${m.role}: ${m.text}`).join("\n")
+            role: 'user',
+            content: history.map(m => `${m.role}: ${m.text}`).join('\n')
         }
     ];
 
-    const res = await client.post('/api/chat', {
-        model,
-        messages,
-        stream: false,
-        options: {
-            temperature: 0,
-            num_predict: 512
-        }
-    });
+    const res = await postChat(
+        client,
+        {
+            model,
+            messages,
+            stream: false,
+            options: {
+                temperature: 0,
+                num_predict: 512
+            }
+        },
+        { think: false }
+    );
 
     return extractAssistantMessage(res.data);
 }
 
 function getModelOptions(model) {
-
     const defaults = {
         num_ctx: 16384,
         num_predict: 8192,
@@ -437,7 +547,7 @@ function getModelOptions(model) {
 
     const cfg = MODEL_CONFIG[model];
 
-    if (!cfg || typeof cfg !== "object") {
+    if (!cfg || typeof cfg !== 'object') {
         return defaults;
     }
 
@@ -447,21 +557,27 @@ function getModelOptions(model) {
     };
 }
 
-export function createHttpClient({ baseURL, timeout = DEFAULT_REQUEST_TIMEOUT_MS, fetchImpl = fetch } = {}) {
+export function createHttpClient({
+    baseURL,
+    timeout = DEFAULT_REQUEST_TIMEOUT_MS,
+    fetchImpl = fetch
+} = {}) {
     return {
-        post: async (resource, data) => requestJson({
-            url: resolveRequestUrl(baseURL, resource),
-            method: 'POST',
-            json: data,
-            timeout,
-            fetchImpl
-        }),
-        get: async (resource) => requestJson({
-            url: resolveRequestUrl(baseURL, resource),
-            method: 'GET',
-            timeout,
-            fetchImpl
-        })
+        post: async (resource, data) =>
+            requestJson({
+                url: resolveRequestUrl(baseURL, resource),
+                method: 'POST',
+                json: data,
+                timeout,
+                fetchImpl
+            }),
+        get: async resource =>
+            requestJson({
+                url: resolveRequestUrl(baseURL, resource),
+                method: 'GET',
+                timeout,
+                fetchImpl
+            })
     };
 }
 
@@ -479,6 +595,34 @@ function resolveRequestUrl(baseURL, resource) {
 
 function ensureTrailingSlash(url) {
     return url.endsWith('/') ? url : `${url}/`;
+}
+
+async function postChat(client, payload, { think = true } = {}) {
+    try {
+        return await client.post('/api/chat', {
+            think,
+            ...payload
+        });
+    } catch (err) {
+        if (isUnsupportedThinkParameterError(err)) {
+            return await client.post('/api/chat', payload);
+        }
+
+        throw err;
+    }
+}
+
+function isUnsupportedThinkParameterError(err) {
+    const raw =
+        typeof err?.response?.data === 'string' ? err.response.data : err?.response?.data?.error;
+
+    const message = [err?.message, raw].filter(Boolean).join(' ');
+
+    return (
+        /unknown field\s+"?think"?/i.test(message) ||
+        /unmarshal.*think/i.test(message) ||
+        /invalid.*think/i.test(message)
+    );
 }
 
 export async function requestJson({ url, method, json, timeout, fetchImpl = fetch }) {
