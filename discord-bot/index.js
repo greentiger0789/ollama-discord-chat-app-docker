@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './src/loadEnv.js';
 import { handleOCommand } from './src/commands/oCommand.js';
 import { client, DISCORD_TOKEN, registerCommands } from './src/discordClient.js';
 import { handleThreadMessage } from './src/handlers/threadMessageHandler.js';

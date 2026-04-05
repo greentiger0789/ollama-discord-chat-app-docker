@@ -1,7 +1,7 @@
 import { REST } from '@discordjs/rest';
 import { Routes } from 'discord-api-types/v10';
 import { Client, GatewayIntentBits } from 'discord.js';
-import 'dotenv/config';
+import './loadEnv.js';
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const GUILD_ID = process.env.DISCORD_GUILD_ID;
