@@ -111,6 +111,7 @@ docker compose up -d
 ├── discord-bot/                 # Discord Bot ディレクトリ
 │   ├── index.js                 # メインスクリプト
 │   ├── package.json             # Node.js 依存関係
+│   ├── package-lock.json        # npm lock file
 │   ├── .dockerignore            # Docker ignore 設定
 │   ├── Dockerfile               # Bot 用 Dockerfile
 │   ├── config/
@@ -201,14 +202,14 @@ cp .env.example .env
 docker compose up -d
 ```
 
-`discord-bot` はホットリロード対応です。`index.js`、`src/`、`config/`、`.env` を更新すると自動で再起動され、`package.json` など依存関係の定義を変えた場合もコンテナ内で再インストールしてから再起動されます。
+`discord-bot` はホットリロード対応です。`index.js`、`src/`、`config/`、`.env` を更新すると自動で再起動され、`package.json` や `package-lock.json` を更新した場合もコンテナ内で `npm ci` を実行してから再起動されます。
 
 ### 直接 Node.js で実行
 
 ```bash
 # 依存関係のインストール
 cd discord-bot
-npm install
+npm ci
 
 # ホットリロード付きで実行
 npm run dev
@@ -412,12 +413,12 @@ deploy:
 
 - ホスト側から実行する場合は `docker compose run --build --rm --no-deps discord-bot npm test` を使用
 - 起動済みコンテナで再実行する場合は `docker compose exec discord-bot npm test` を使用
-- コンテナ内で直接実行する場合は Node.js v24以上を使用し、`npm install` を実行して依存関係をインストール
+- コンテナ内で直接実行する場合は Node.js v24以上を使用し、`npm ci` を実行して `package-lock.json` に固定された依存関係をインストール
 
 ## ランタイム
 
 - **Node.js**: v24以上
-- **pnpm**: パッケージマネージャ（Docker内で使用）
+- **npm**: パッケージマネージャ (`package-lock.json` を Git 管理)
 
 ---
 
