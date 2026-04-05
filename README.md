@@ -211,6 +211,12 @@ docker compose up -d
 cd discord-bot
 npm ci
 
+# Lint
+npm run lint
+
+# Lint の自動修正と整形
+npm run lint:fix
+
 # ホットリロード付きで実行
 npm run dev
 
@@ -304,6 +310,20 @@ docker compose run --build --rm --no-deps discord-bot npm test
 docker compose exec discord-bot npm test
 ```
 
+Lint は以下で実行できます。
+
+```bash
+# JavaScript / package.json
+docker compose run --build --rm --no-deps discord-bot npm run lint
+
+# GitHub Actions workflow
+docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12
+
+# Dockerfile
+docker run --rm -v "$PWD:/repo" -w /repo hadolint/hadolint:v2.14.0 hadolint /repo/Dockerfile
+docker run --rm -v "$PWD:/repo" -w /repo hadolint/hadolint:v2.14.0 hadolint /repo/discord-bot/Dockerfile
+```
+
 テストカバレッジ：
 - `decisionPrompt.test.js` - 検索判定プロンプト
 - `discordClient.test.js` - Discord クライアント
@@ -321,8 +341,12 @@ docker compose exec discord-bot npm test
 
 `.github/workflows/ci.yml` で CI/CD パイプラインが設定されています。
 
-- **トリガー**: `main` および `develop` ブランチへのプッシュ、PR
-- **テスト実行**: `npm test` コマンド
+- **トリガー**: `main` および `master` ブランチへの push / pull_request
+- **JavaScript Lint**: `discord-bot` で `Biome` を実行
+- **Workflow Lint**: `actionlint` で GitHub Actions workflow を検証
+- **Dockerfile Lint**: `hadolint` で両方の Dockerfile を検証
+- **テスト実行**: `npm test`
+- **Docker Build Check**: `discord-bot` イメージのビルド確認
 
 ---
 
