@@ -23,26 +23,16 @@ export async function handleThreadMessage(message, deps = {}) {
     });
 
     try {
-        const thinkingMsg = await message.channel.send(
-            buildMaidThinkingMessage()
-        );
+        const thinkingMsg = await message.channel.send(buildMaidThinkingMessage());
 
-        const responseText = await generateResponse(
-            message.content,
-            history
-        );
+        const responseText = await generateResponse(message.content, history);
 
         addToThreadHistory(threadId, {
             role: 'assistant',
             text: responseText
         });
 
-        await sendSplitMessage(
-            message.channel,
-            responseText,
-            thinkingMsg
-        );
-
+        await sendSplitMessage(message.channel, responseText, thinkingMsg);
     } catch (err) {
         console.error('Error generating follow-up', err);
         await message.channel.send('エラーが発生しました。');
