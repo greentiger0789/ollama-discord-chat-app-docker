@@ -1,23 +1,20 @@
-import assert from "node:assert/strict";
-import test, { describe } from "node:test";
+import assert from 'node:assert/strict';
+import test, { describe } from 'node:test';
 
-import {
-    buildMaidThinkingMessage,
-    sendSplitMessage
-} from "../src/messageUtils.js";
+import { buildMaidThinkingMessage, sendSplitMessage } from '../src/messageUtils.js';
 
 /* ================================
    buildMaidThinkingMessage テスト
 ================================ */
 
-describe("buildMaidThinkingMessage", () => {
-    test("returns a non-empty string", () => {
+describe('buildMaidThinkingMessage', () => {
+    test('returns a non-empty string', () => {
         const message = buildMaidThinkingMessage();
-        assert.equal(typeof message, "string");
+        assert.equal(typeof message, 'string');
         assert.ok(message.length > 0);
     });
 
-    test("starts with an emoji", () => {
+    test('starts with an emoji', () => {
         const message = buildMaidThinkingMessage();
 
         // Unicode安全な取得
@@ -30,20 +27,20 @@ describe("buildMaidThinkingMessage", () => {
         assert.ok(isEmoji, `First character should be emoji: ${firstChar}`);
     });
 
-    test("contains expected keywords", () => {
+    test('contains expected keywords', () => {
         const message = buildMaidThinkingMessage();
 
         const hasExpectedContent =
-            message.includes("ご主人様") ||
-            message.includes("演算") ||
-            message.includes("解析") ||
-            message.includes("中") ||
-            message.includes("おります");
+            message.includes('ご主人様') ||
+            message.includes('演算') ||
+            message.includes('解析') ||
+            message.includes('中') ||
+            message.includes('おります');
 
         assert.ok(hasExpectedContent);
     });
 
-    test("generates varied messages", () => {
+    test('generates varied messages', () => {
         const messages = new Set();
 
         for (let i = 0; i < 20; i++) {
@@ -59,15 +56,15 @@ describe("buildMaidThinkingMessage", () => {
    sendSplitMessage テスト
 ================================ */
 
-describe("sendSplitMessage", () => {
-    test("sends short message directly", async () => {
+describe('sendSplitMessage', () => {
+    test('sends short message directly', async () => {
         const messages = [];
 
         const mockChannel = {
-            send: async (text) => messages.push(text)
+            send: async text => messages.push(text)
         };
 
-        const text = "短いメッセージ";
+        const text = '短いメッセージ';
 
         await sendSplitMessage(mockChannel, text);
 
@@ -75,20 +72,20 @@ describe("sendSplitMessage", () => {
         assert.equal(messages[0], text);
     });
 
-    test("edits message if firstMessageToEdit exists", async () => {
+    test('edits message if firstMessageToEdit exists', async () => {
         const edits = [];
 
         const mockMessage = {
-            edit: async (text) => edits.push(text)
+            edit: async text => edits.push(text)
         };
 
         const mockChannel = {
             send: async () => {
-                throw new Error("should not send");
+                throw new Error('should not send');
             }
         };
 
-        const text = "短い";
+        const text = '短い';
 
         await sendSplitMessage(mockChannel, text, mockMessage);
 
@@ -96,14 +93,14 @@ describe("sendSplitMessage", () => {
         assert.equal(edits[0], text);
     });
 
-    test("splits long message", async () => {
+    test('splits long message', async () => {
         const messages = [];
 
         const mockChannel = {
-            send: async (text) => messages.push(text)
+            send: async text => messages.push(text)
         };
 
-        const text = "a".repeat(2000);
+        const text = 'a'.repeat(2000);
 
         await sendSplitMessage(mockChannel, text);
 
@@ -112,33 +109,33 @@ describe("sendSplitMessage", () => {
         assert.equal(messages[1].length, 100);
     });
 
-    test("splits very long message", async () => {
+    test('splits very long message', async () => {
         const messages = [];
 
         const mockChannel = {
-            send: async (text) => messages.push(text)
+            send: async text => messages.push(text)
         };
 
-        const text = "x".repeat(5000);
+        const text = 'x'.repeat(5000);
 
         await sendSplitMessage(mockChannel, text);
 
         assert.equal(messages.length, Math.ceil(5000 / 1900));
     });
 
-    test("edits first chunk and sends rest", async () => {
+    test('edits first chunk and sends rest', async () => {
         const edits = [];
         const messages = [];
 
         const mockMessage = {
-            edit: async (text) => edits.push(text)
+            edit: async text => edits.push(text)
         };
 
         const mockChannel = {
-            send: async (text) => messages.push(text)
+            send: async text => messages.push(text)
         };
 
-        const text = "b".repeat(3000);
+        const text = 'b'.repeat(3000);
 
         await sendSplitMessage(mockChannel, text, mockMessage);
 
@@ -149,14 +146,14 @@ describe("sendSplitMessage", () => {
         assert.equal(messages[0].length, 1100);
     });
 
-    test("exactly 1900 characters", async () => {
+    test('exactly 1900 characters', async () => {
         const messages = [];
 
         const mockChannel = {
-            send: async (text) => messages.push(text)
+            send: async text => messages.push(text)
         };
 
-        const text = "c".repeat(1900);
+        const text = 'c'.repeat(1900);
 
         await sendSplitMessage(mockChannel, text);
 
@@ -164,14 +161,14 @@ describe("sendSplitMessage", () => {
         assert.equal(messages[0].length, 1900);
     });
 
-    test("1901 characters", async () => {
+    test('1901 characters', async () => {
         const messages = [];
 
         const mockChannel = {
-            send: async (text) => messages.push(text)
+            send: async text => messages.push(text)
         };
 
-        const text = "d".repeat(1901);
+        const text = 'd'.repeat(1901);
 
         await sendSplitMessage(mockChannel, text);
 

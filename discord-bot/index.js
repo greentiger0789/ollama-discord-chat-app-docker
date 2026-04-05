@@ -16,7 +16,7 @@ client.once('clientReady', async () => {
 /* Slash Command */
 /* ========================================================= */
 
-client.on('interactionCreate', async (interaction) => {
+client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
     if (interaction.commandName !== 'o') return;
 
@@ -27,7 +27,7 @@ client.on('interactionCreate', async (interaction) => {
 /* Thread Follow-up */
 /* ========================================================= */
 
-client.on('messageCreate', async (message) => {
+client.on('messageCreate', async message => {
     await handleThreadMessage(message);
 });
 
@@ -41,7 +41,7 @@ process.on('SIGTERM', () => {
     process.exit(0);
 });
 
-client.login(DISCORD_TOKEN).catch((e) => {
+client.login(DISCORD_TOKEN).catch(e => {
     console.error('Login failed', e);
     process.exit(1);
 });

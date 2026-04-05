@@ -9,7 +9,7 @@ const defaultDeps = {
     generateResponse,
     getThreadHistory,
     addToThreadHistory,
-    initializeThread,
+    initializeThread
 };
 
 export function createHandleOCommand(deps = defaultDeps) {
@@ -19,7 +19,7 @@ export function createHandleOCommand(deps = defaultDeps) {
         generateResponse,
         getThreadHistory,
         addToThreadHistory,
-        initializeThread,
+        initializeThread
     } = { ...defaultDeps, ...deps };
 
     return async function handleOCommand(interaction) {
@@ -45,21 +45,19 @@ export function createHandleOCommand(deps = defaultDeps) {
 
             const thinkingMsg = await thread.send(buildThinking());
 
-            const responseText = await generateResponse(
-                prompt,
-                history
-            );
+            const responseText = await generateResponse(prompt, history);
 
             addToThreadHistory(thread.id, { role: 'assistant', text: responseText });
 
             await sendSplitMessage(thread, responseText, thinkingMsg);
-
         } catch (err) {
             console.error('Error handling /o command', err);
-            await interaction.followUp({
-                content: 'エラーが発生しました。',
-                ephemeral: true
-            }).catch(() => { });
+            await interaction
+                .followUp({
+                    content: 'エラーが発生しました。',
+                    ephemeral: true
+                })
+                .catch(() => {});
         }
     };
 }

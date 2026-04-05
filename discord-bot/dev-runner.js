@@ -1,24 +1,15 @@
-import { spawn } from 'child_process';
-import crypto from 'crypto';
-import fs from 'fs';
-import path from 'path';
+import { spawn } from 'node:child_process';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import { APP_DIR, readEnvFile } from './src/env.js';
 
 const CHILD_COMMAND = ['node', 'index.js'];
 const POLL_INTERVAL_MS = 1000;
 const MANIFEST_STATE_FILE = path.join(APP_DIR, 'node_modules', '.manifest.hash');
 const LOCK_FILES = ['package-lock.json', 'npm-shrinkwrap.json'];
-const MANIFEST_FILES = [
-    'package.json',
-    ...LOCK_FILES
-];
-const WATCH_ROOTS = [
-    'index.js',
-    '.env',
-    ...MANIFEST_FILES,
-    'src',
-    'config'
-];
+const MANIFEST_FILES = ['package.json', ...LOCK_FILES];
+const WATCH_ROOTS = ['index.js', '.env', ...MANIFEST_FILES, 'src', 'config'];
 
 let childProcess = null;
 let isRestarting = false;
@@ -163,7 +154,11 @@ function runCommand(command, args) {
                 return;
             }
 
-            reject(new Error(`${command} ${args.join(' ')} failed with ${signal || `exit code ${code}`}`));
+            reject(
+                new Error(
+                    `${command} ${args.join(' ')} failed with ${signal || `exit code ${code}`}`
+                )
+            );
         });
 
         processRef.on('error', reject);
@@ -171,7 +166,7 @@ function runCommand(command, args) {
 }
 
 function hasLockFile() {
-    return LOCK_FILES.some((relativePath) => fs.existsSync(path.join(APP_DIR, relativePath)));
+    return LOCK_FILES.some(relativePath => fs.existsSync(path.join(APP_DIR, relativePath)));
 }
 
 function getInstallCommandArgs() {
@@ -243,14 +238,14 @@ function startChild() {
         console.error(`[hot-reload] App stopped with ${reason}. Waiting for file changes...`);
     });
 
-    childProcess.on('error', (error) => {
+    childProcess.on('error', error => {
         childProcess = null;
         console.error('[hot-reload] Failed to start app:', error.message);
     });
 }
 
 function stopChild() {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
         if (!childProcess) {
             resolve();
             return;
@@ -282,7 +277,9 @@ function stopChild() {
 async function restartChild(changedPaths) {
     const summary = changedPaths.slice(0, 5).join(', ');
     const overflow = changedPaths.length > 5 ? ` (+${changedPaths.length - 5} more)` : '';
-    const changedManifest = changedPaths.some((relativePath) => MANIFEST_FILES.includes(relativePath));
+    const changedManifest = changedPaths.some(relativePath =>
+        MANIFEST_FILES.includes(relativePath)
+    );
 
     console.log(`[hot-reload] Change detected: ${summary}${overflow}`);
 
@@ -343,20 +340,20 @@ async function shutdown(signal) {
 }
 
 process.on('SIGINT', () => {
-    shutdown('SIGINT').catch((error) => {
+    shutdown('SIGINT').catch(error => {
         console.error('[hot-reload] Shutdown failed:', error.message);
         process.exit(1);
     });
 });
 
 process.on('SIGTERM', () => {
-    shutdown('SIGTERM').catch((error) => {
+    shutdown('SIGTERM').catch(error => {
         console.error('[hot-reload] Shutdown failed:', error.message);
         process.exit(1);
     });
 });
 
-boot().catch((error) => {
+boot().catch(error => {
     console.error('[hot-reload] Failed to boot dev runner:', error.message);
     process.exit(1);
 });

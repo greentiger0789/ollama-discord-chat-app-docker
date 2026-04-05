@@ -1,17 +1,14 @@
-import fs from 'fs';
-import path from 'path';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const APP_DIR = path.resolve(MODULE_DIR, '..');
-const ENV_CANDIDATES = [
-    path.join(APP_DIR, '.env'),
-    path.resolve(APP_DIR, '../.env')
-];
+const ENV_CANDIDATES = [path.join(APP_DIR, '.env'), path.resolve(APP_DIR, '../.env')];
 
 export function resolveEnvPath() {
-    return ENV_CANDIDATES.find((candidate) => fs.existsSync(candidate)) || ENV_CANDIDATES[0];
+    return ENV_CANDIDATES.find(candidate => fs.existsSync(candidate)) || ENV_CANDIDATES[0];
 }
 
 export function readEnvFile() {

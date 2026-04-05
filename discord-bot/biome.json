@@ -1,0 +1,26 @@
+{
+    "files": {
+        "includes": [
+            "*.js",
+            "src/**/*.js",
+            "test/**/*.js",
+            "package.json",
+            "!node_modules",
+            "!coverage"
+        ],
+        "ignoreUnknown": true
+    },
+    "formatter": {
+        "indentStyle": "space",
+        "indentWidth": 4,
+        "lineWidth": 100
+    },
+    "javascript": {
+        "formatter": {
+            "quoteStyle": "single",
+            "trailingCommas": "none",
+            "semicolons": "always",
+            "arrowParentheses": "asNeeded"
+        }
+    }
+}
