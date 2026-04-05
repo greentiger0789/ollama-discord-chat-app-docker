@@ -1,16 +1,20 @@
-import assert from "node:assert/strict";
-import test, { after, before, describe } from "node:test";
-import createOllamaClient from "../src/ollamaClient.js";
+import assert from 'node:assert/strict';
+import test, { after, before, describe } from 'node:test';
+import createOllamaClient from '../src/ollamaClient.js';
 
-// console.errorを抑制（モジュール読み込み前に設定）
+// console出力を抑制（モジュール読み込み前に設定）
 let originalConsoleError;
+let originalConsoleWarn;
 before(() => {
     originalConsoleError = console.error;
-    console.error = () => { };
+    originalConsoleWarn = console.warn;
+    console.error = () => {};
+    console.warn = () => {};
 });
 
 after(() => {
     console.error = originalConsoleError;
+    console.warn = originalConsoleWarn;
 });
 
 // モック用の変数
@@ -35,57 +39,57 @@ function buildClient(options = {}) {
    基本応答テスト
 ================================ */
 
-describe("generate() basic functionality", () => {
-    test("should return assistant response", async () => {
+describe('generate() basic functionality', () => {
+    test('should return assistant response', async () => {
         mockPostHandler = async () => ({
             data: {
                 message: {
-                    content: "これはテスト回答です"
+                    content: 'これはテスト回答です'
                 }
             }
         });
         mockGetHandler = async () => ({ data: {} });
 
         const client = buildClient({
-            baseURL: "http://mock-ollama"
+            baseURL: 'http://mock-ollama'
         });
 
         const result = await client.generate({
-            prompt: "こんにちは",
+            prompt: 'こんにちは',
             history: []
         });
 
-        assert.equal(result, "これはテスト回答です");
+        assert.equal(result, 'これはテスト回答です');
     });
 
-    test("should work with empty prompt", async () => {
+    test('should work with empty prompt', async () => {
         mockPostHandler = async () => ({
             data: {
                 message: {
-                    content: "空のプロンプトへの応答"
+                    content: '空のプロンプトへの応答'
                 }
             }
         });
 
         const client = buildClient();
-        const result = await client.generate({ prompt: "", history: [] });
+        const result = await client.generate({ prompt: '', history: [] });
 
-        assert.ok(typeof result === "string");
+        assert.ok(typeof result === 'string');
     });
 
-    test("should work with empty history", async () => {
+    test('should work with empty history', async () => {
         mockPostHandler = async () => ({
             data: {
                 message: {
-                    content: "履歴なしの応答"
+                    content: '履歴なしの応答'
                 }
             }
         });
 
         const client = buildClient();
-        const result = await client.generate({ prompt: "テスト" });
+        const result = await client.generate({ prompt: 'テスト' });
 
-        assert.ok(typeof result === "string");
+        assert.ok(typeof result === 'string');
     });
 });
 
@@ -93,12 +97,12 @@ describe("generate() basic functionality", () => {
    履歴処理テスト
 ================================ */
 
-describe("generate() history handling", () => {
-    test("should work with history", async () => {
+describe('generate() history handling', () => {
+    test('should work with history', async () => {
         mockPostHandler = async () => ({
             data: {
                 message: {
-                    content: "履歴ありの応答"
+                    content: '履歴ありの応答'
                 }
             }
         });
@@ -106,45 +110,45 @@ describe("generate() history handling", () => {
         const client = buildClient();
 
         const result = await client.generate({
-            prompt: "続けて",
+            prompt: '続けて',
             history: [
-                { role: "user", text: "前の質問" },
-                { role: "assistant", text: "前の回答" }
+                { role: 'user', text: '前の質問' },
+                { role: 'assistant', text: '前の回答' }
             ]
         });
 
-        assert.ok(typeof result === "string");
+        assert.ok(typeof result === 'string');
     });
 
-    test("should handle long history safely", async () => {
+    test('should handle long history safely', async () => {
         mockPostHandler = async () => ({
             data: {
                 message: {
-                    content: "長文履歴の応答"
+                    content: '長文履歴の応答'
                 }
             }
         });
 
         const longHistory = Array.from({ length: 50 }, (_, i) => ({
-            role: i % 2 === 0 ? "user" : "assistant",
-            text: "テスト".repeat(200)
+            role: i % 2 === 0 ? 'user' : 'assistant',
+            text: 'テスト'.repeat(200)
         }));
 
         const client = buildClient();
 
         const result = await client.generate({
-            prompt: "長文テスト",
+            prompt: '長文テスト',
             history: longHistory
         });
 
         assert.ok(result.length > 0);
     });
 
-    test("should handle history with empty text", async () => {
+    test('should handle history with empty text', async () => {
         mockPostHandler = async () => ({
             data: {
                 message: {
-                    content: "空テキスト履歴の応答"
+                    content: '空テキスト履歴の応答'
                 }
             }
         });
@@ -152,14 +156,14 @@ describe("generate() history handling", () => {
         const client = buildClient();
 
         const result = await client.generate({
-            prompt: "テスト",
+            prompt: 'テスト',
             history: [
-                { role: "user", text: "" },
-                { role: "assistant", text: "回答" }
+                { role: 'user', text: '' },
+                { role: 'assistant', text: '回答' }
             ]
         });
 
-        assert.ok(typeof result === "string");
+        assert.ok(typeof result === 'string');
     });
 });
 
@@ -167,17 +171,17 @@ describe("generate() history handling", () => {
    検索判定テスト
 ================================ */
 
-describe("generate() search decision", () => {
-    test("should trigger search for force keywords", async () => {
+describe('generate() search decision', () => {
+    test('should trigger search for force keywords', async () => {
         let searchCalled = false;
 
         // モック検索関数
-        const mockSearchFn = async (plan) => {
+        const mockSearchFn = async _plan => {
             searchCalled = true;
-            return "モック検索結果: 今日の天気は晴れです";
+            return 'モック検索結果: 今日の天気は晴れです';
         };
 
-        mockPostHandler = async (url, data) => {
+        mockPostHandler = async (_url, data) => {
             // 検索判定リクエスト
             if (data.messages && data.messages.length === 2) {
                 return {
@@ -185,8 +189,8 @@ describe("generate() search decision", () => {
                         message: {
                             content: JSON.stringify({
                                 needSearch: true,
-                                engine: "tavily",
-                                searchQuery: "今日の天気"
+                                engine: 'tavily',
+                                searchQuery: '今日の天気'
                             })
                         }
                     }
@@ -197,7 +201,7 @@ describe("generate() search decision", () => {
                 return {
                     data: {
                         message: {
-                            content: "検索結果を含む応答"
+                            content: '検索結果を含む応答'
                         }
                     }
                 };
@@ -205,7 +209,7 @@ describe("generate() search decision", () => {
             return {
                 data: {
                     message: {
-                        content: "通常応答"
+                        content: '通常応答'
                     }
                 }
             };
@@ -221,21 +225,21 @@ describe("generate() search decision", () => {
 
         // 「今日」は強制検索キーワード
         const result = await client.generate({
-            prompt: "今日の天気はどう？",
+            prompt: '今日の天気はどう？',
             history: []
         });
 
-        assert.ok(searchCalled, "searchFn should be called for force keywords");
-        assert.ok(typeof result === "string");
+        assert.ok(searchCalled, 'searchFn should be called for force keywords');
+        assert.ok(typeof result === 'string');
     });
 
-    test("should not search for general questions", async () => {
+    test('should not search for general questions', async () => {
         let searchCalled = false;
 
         // モック検索関数
-        const mockSearchFn = async (plan) => {
+        const mockSearchFn = async _plan => {
             searchCalled = true;
-            return "モック検索結果";
+            return 'モック検索結果';
         };
 
         mockPostHandler = async () => ({
@@ -243,8 +247,8 @@ describe("generate() search decision", () => {
                 message: {
                     content: JSON.stringify({
                         needSearch: false,
-                        engine: "tavily",
-                        searchQuery: ""
+                        engine: 'tavily',
+                        searchQuery: ''
                     })
                 }
             }
@@ -253,12 +257,12 @@ describe("generate() search decision", () => {
         const client = buildClient({ searchFn: mockSearchFn });
 
         const result = await client.generate({
-            prompt: "こんにちは",
+            prompt: 'こんにちは',
             history: []
         });
 
-        assert.ok(!searchCalled, "searchFn should not be called for general questions");
-        assert.ok(typeof result === "string");
+        assert.ok(!searchCalled, 'searchFn should not be called for general questions');
+        assert.ok(typeof result === 'string');
     });
 });
 
@@ -266,14 +270,56 @@ describe("generate() search decision", () => {
    レスポンス形式テスト
 ================================ */
 
-describe("generate() response formats", () => {
-    test("should handle OpenAI-compatible response format", async () => {
+describe('generate() response formats', () => {
+    test('should enable thinking only for the final chat request', async () => {
+        const capturedThinkFlags = [];
+        let callCount = 0;
+
+        mockPostHandler = async (_url, data) => {
+            capturedThinkFlags.push(data.think);
+            callCount++;
+
+            if (callCount === 1) {
+                return {
+                    data: {
+                        message: {
+                            content: JSON.stringify({
+                                needSearch: false,
+                                engine: 'tavily',
+                                searchQuery: ''
+                            })
+                        }
+                    }
+                };
+            }
+
+            return {
+                data: {
+                    message: {
+                        thinking: '内部推論',
+                        content: 'thinking有効時の応答'
+                    }
+                }
+            };
+        };
+
+        const client = buildClient();
+        const result = await client.generate({
+            prompt: 'テスト',
+            history: []
+        });
+
+        assert.equal(result, 'thinking有効時の応答');
+        assert.deepEqual(capturedThinkFlags, [false, true]);
+    });
+
+    test('should handle OpenAI-compatible response format', async () => {
         mockPostHandler = async () => ({
             data: {
                 choices: [
                     {
                         message: {
-                            content: "OpenAI形式の応答"
+                            content: 'OpenAI形式の応答'
                         }
                     }
                 ]
@@ -282,30 +328,30 @@ describe("generate() response formats", () => {
 
         const client = buildClient();
         const result = await client.generate({
-            prompt: "テスト",
+            prompt: 'テスト',
             history: []
         });
 
-        assert.equal(result, "OpenAI形式の応答");
+        assert.equal(result, 'OpenAI形式の応答');
     });
 
-    test("should handle generate-compatible response format", async () => {
+    test('should handle generate-compatible response format', async () => {
         mockPostHandler = async () => ({
             data: {
-                response: "generate形式の応答"
+                response: 'generate形式の応答'
             }
         });
 
         const client = buildClient();
         const result = await client.generate({
-            prompt: "テスト",
+            prompt: 'テスト',
             history: []
         });
 
-        assert.equal(result, "generate形式の応答");
+        assert.equal(result, 'generate形式の応答');
     });
 
-    test("should strip think tags from response", async () => {
+    test('should strip think tags from response', async () => {
         let callCount = 0;
         mockPostHandler = async () => {
             callCount++;
@@ -316,8 +362,8 @@ describe("generate() response formats", () => {
                         message: {
                             content: JSON.stringify({
                                 needSearch: false,
-                                engine: "tavily",
-                                searchQuery: ""
+                                engine: 'tavily',
+                                searchQuery: ''
                             })
                         }
                     }
@@ -326,7 +372,7 @@ describe("generate() response formats", () => {
             return {
                 data: {
                     message: {
-                        content: "<tool_call>これは思考内容です。<\/think>実際の応答"
+                        content: '<tool_call>これは思考内容です。</think>実際の応答'
                     }
                 }
             };
@@ -334,31 +380,135 @@ describe("generate() response formats", () => {
 
         const client = buildClient();
         const result = await client.generate({
-            prompt: "テスト",
+            prompt: 'テスト',
             history: []
         });
 
-        assert.ok(!result.includes("思考内容"));
-        assert.ok(result.includes("実際の応答"));
+        assert.ok(!result.includes('思考内容'));
+        assert.ok(result.includes('実際の応答'));
     });
 
-    test("should handle empty content after stripping think tags", async () => {
+    test('should handle empty content after stripping think tags', async () => {
         mockPostHandler = async () => ({
             data: {
                 message: {
-                    content: "<tool_call>思考のみ...<tool_call>全て思考内容<\/think>"
+                    content: '<tool_call>思考のみ...<tool_call>全て思考内容</think>'
                 }
             }
         });
 
         const client = buildClient();
         const result = await client.generate({
-            prompt: "テスト",
+            prompt: 'テスト',
             history: []
         });
 
         // 空になった場合は元のコンテンツを返すか、エラーメッセージを返す
-        assert.ok(typeof result === "string");
+        assert.ok(typeof result === 'string');
+    });
+
+    test('should retry with a larger num_predict when thinking consumes the response budget', async () => {
+        let callCount = 0;
+        const capturedPredicts = [];
+
+        mockPostHandler = async (_url, data) => {
+            callCount++;
+            capturedPredicts.push(data.options?.num_predict ?? null);
+
+            if (callCount === 1) {
+                return {
+                    data: {
+                        message: {
+                            content: JSON.stringify({
+                                needSearch: false,
+                                engine: 'tavily',
+                                searchQuery: ''
+                            })
+                        }
+                    }
+                };
+            }
+
+            if (callCount === 2) {
+                return {
+                    data: {
+                        model: 'qwen3.5:9b',
+                        done: true,
+                        done_reason: 'length',
+                        message: {
+                            role: 'assistant',
+                            content: '',
+                            thinking: 'Thinking Process:\n...'
+                        }
+                    }
+                };
+            }
+
+            return {
+                data: {
+                    model: 'qwen3.5:9b',
+                    done: true,
+                    done_reason: 'stop',
+                    message: {
+                        role: 'assistant',
+                        content: '再試行後の結論',
+                        thinking: 'Thinking Process:\n...'
+                    }
+                }
+            };
+        };
+
+        const client = buildClient();
+        const result = await client.generate({
+            prompt: 'テスト',
+            history: []
+        });
+
+        assert.equal(result, '再試行後の結論');
+        assert.deepEqual(capturedPredicts, [200, 8192, 16384]);
+    });
+
+    test('should return a fallback message when thinking-only responses persist after retry', async () => {
+        let callCount = 0;
+
+        mockPostHandler = async () => {
+            callCount++;
+
+            if (callCount === 1) {
+                return {
+                    data: {
+                        message: {
+                            content: JSON.stringify({
+                                needSearch: false,
+                                engine: 'tavily',
+                                searchQuery: ''
+                            })
+                        }
+                    }
+                };
+            }
+
+            return {
+                data: {
+                    model: 'qwen3.5:9b',
+                    done: true,
+                    done_reason: 'length',
+                    message: {
+                        role: 'assistant',
+                        content: '',
+                        thinking: 'Thinking Process:\n...'
+                    }
+                }
+            };
+        };
+
+        const client = buildClient();
+        const result = await client.generate({
+            prompt: 'テスト',
+            history: []
+        });
+
+        assert.equal(result, '回答本文を取得できませんでした。');
     });
 });
 
@@ -366,45 +516,98 @@ describe("generate() response formats", () => {
    エラーハンドリングテスト
 ================================ */
 
-describe("generate() error handling", () => {
-    test("should handle unknown response format", async () => {
+describe('generate() error handling', () => {
+    test('should retry without think when the server does not support it', async () => {
+        let attemptsWithExplicitThink = 0;
+        let attemptsWithoutThink = 0;
+
+        mockPostHandler = async (_url, data) => {
+            if (Object.hasOwn(data, 'think')) {
+                attemptsWithExplicitThink++;
+
+                const error = new Error('Request failed with status 400');
+                error.response = {
+                    data: {
+                        error: 'json: unknown field "think"'
+                    }
+                };
+                throw error;
+            }
+
+            attemptsWithoutThink++;
+
+            if (attemptsWithoutThink === 1) {
+                return {
+                    data: {
+                        message: {
+                            content: JSON.stringify({
+                                needSearch: false,
+                                engine: 'tavily',
+                                searchQuery: ''
+                            })
+                        }
+                    }
+                };
+            }
+
+            return {
+                data: {
+                    message: {
+                        content: '旧バージョン互換の応答'
+                    }
+                }
+            };
+        };
+
+        const client = buildClient();
+        const result = await client.generate({
+            prompt: 'テスト',
+            history: []
+        });
+
+        assert.equal(result, '旧バージョン互換の応答');
+        assert.equal(attemptsWithExplicitThink, 2);
+        assert.equal(attemptsWithoutThink, 2);
+    });
+
+    test('should handle unknown response format', async () => {
         mockPostHandler = async () => ({
             data: {
-                unknownField: "unknown"
+                unknownField: 'unknown'
             }
         });
 
         const client = buildClient();
         const result = await client.generate({
-            prompt: "テスト",
+            prompt: 'テスト',
             history: []
         });
 
-        assert.equal(result, "回答形式を解析できませんでした。");
+        assert.equal(result, '回答形式を解析できませんでした。');
     });
 
-    test("should handle network error", async () => {
+    test('should handle network error', async () => {
         mockPostHandler = async () => {
-            throw new Error("Network error");
+            throw new Error('Network error');
         };
 
         const client = buildClient();
 
         try {
             await client.generate({
-                prompt: "テスト",
+                prompt: 'テスト',
                 history: []
             });
-            assert.fail("Should have thrown an error");
+            assert.fail('Should have thrown an error');
         } catch (err) {
-            assert.ok(err.message.includes("Network error"));
+            assert.ok(err.message.includes('Network error'));
         }
     });
 
-    test("should handle error with response data", async () => {
-        const error = new Error("API error");
+    test('should handle error with response data', async () => {
+        const error = new Error('API error');
         error.response = {
-            data: "Error details from server"
+            data: 'Error details from server'
         };
 
         mockPostHandler = async () => {
@@ -416,11 +619,11 @@ describe("generate() error handling", () => {
         // err.response.dataがある場合、streamToString()が呼ばれて
         // エラーメッセージとして返される（例外は投げられない）
         const result = await client.generate({
-            prompt: "テスト",
+            prompt: 'テスト',
             history: []
         });
 
-        assert.equal(result, "Error details from server");
+        assert.equal(result, 'Error details from server');
     });
 });
 
@@ -428,16 +631,16 @@ describe("generate() error handling", () => {
    モデルオプションテスト
 ================================ */
 
-describe("generate() model options", () => {
-    test("should use default model when not specified", async () => {
+describe('generate() model options', () => {
+    test('should use default model when not specified', async () => {
         let capturedModel = null;
 
-        mockPostHandler = async (url, data) => {
+        mockPostHandler = async (_url, data) => {
             capturedModel = data.model;
             return {
                 data: {
                     message: {
-                        content: "応答"
+                        content: '応答'
                     }
                 }
             };
@@ -445,22 +648,22 @@ describe("generate() model options", () => {
 
         const client = buildClient();
         await client.generate({
-            prompt: "テスト",
+            prompt: 'テスト',
             history: []
         });
 
-        assert.equal(capturedModel, "qwen3.5:9b");
+        assert.equal(capturedModel, 'qwen3.5:9b');
     });
 
-    test("should use custom model when specified", async () => {
+    test('should use custom model when specified', async () => {
         let capturedModel = null;
 
-        mockPostHandler = async (url, data) => {
+        mockPostHandler = async (_url, data) => {
             capturedModel = data.model;
             return {
                 data: {
                     message: {
-                        content: "応答"
+                        content: '応答'
                     }
                 }
             };
@@ -468,15 +671,15 @@ describe("generate() model options", () => {
 
         const client = buildClient();
         await client.generate({
-            model: "custom-model",
-            prompt: "テスト",
+            model: 'custom-model',
+            prompt: 'テスト',
             history: []
         });
 
-        assert.equal(capturedModel, "custom-model");
+        assert.equal(capturedModel, 'custom-model');
     });
 
-    test("should load model-specific options from config", async () => {
+    test('should load model-specific options from config', async () => {
         let callCount = 0;
         let capturedOptions = null;
 
@@ -489,8 +692,8 @@ describe("generate() model options", () => {
                         message: {
                             content: JSON.stringify({
                                 needSearch: false,
-                                engine: "tavily",
-                                searchQuery: ""
+                                engine: 'tavily',
+                                searchQuery: ''
                             })
                         }
                     }
@@ -501,7 +704,7 @@ describe("generate() model options", () => {
             return {
                 data: {
                     message: {
-                        content: "設定込みの応答"
+                        content: '設定込みの応答'
                     }
                 }
             };
@@ -509,8 +712,8 @@ describe("generate() model options", () => {
 
         const client = buildClient();
         await client.generate({
-            model: "qwen3.5:cloud",
-            prompt: "設定テスト",
+            model: 'qwen3.5:cloud',
+            prompt: '設定テスト',
             history: []
         });
 
@@ -526,16 +729,16 @@ describe("generate() model options", () => {
    メッセージ構築テスト
 ================================ */
 
-describe("generate() message construction", () => {
-    test("should include system prompt in messages", async () => {
+describe('generate() message construction', () => {
+    test('should include system prompt in messages', async () => {
         let capturedMessages = null;
 
-        mockPostHandler = async (url, data) => {
+        mockPostHandler = async (_url, data) => {
             capturedMessages = data.messages;
             return {
                 data: {
                     message: {
-                        content: "応答"
+                        content: '応答'
                     }
                 }
             };
@@ -543,24 +746,24 @@ describe("generate() message construction", () => {
 
         const client = buildClient();
         await client.generate({
-            prompt: "テスト",
+            prompt: 'テスト',
             history: []
         });
 
         assert.ok(capturedMessages.length > 0);
-        assert.equal(capturedMessages[0].role, "system");
-        assert.ok(capturedMessages[0].content.includes("メイドちゃん"));
+        assert.equal(capturedMessages[0].role, 'system');
+        assert.ok(capturedMessages[0].content.includes('メイドちゃん'));
     });
 
-    test("should map history roles correctly", async () => {
+    test('should map history roles correctly', async () => {
         let capturedMessages = null;
 
-        mockPostHandler = async (url, data) => {
+        mockPostHandler = async (_url, data) => {
             capturedMessages = data.messages;
             return {
                 data: {
                     message: {
-                        content: "応答"
+                        content: '応答'
                     }
                 }
             };
@@ -568,16 +771,16 @@ describe("generate() message construction", () => {
 
         const client = buildClient();
         await client.generate({
-            prompt: "テスト",
+            prompt: 'テスト',
             history: [
-                { role: "user", text: "質問" },
-                { role: "assistant", text: "回答" }
+                { role: 'user', text: '質問' },
+                { role: 'assistant', text: '回答' }
             ]
         });
 
-        assert.equal(capturedMessages[1].role, "user");
-        assert.equal(capturedMessages[1].content, "質問");
-        assert.equal(capturedMessages[2].role, "assistant");
-        assert.equal(capturedMessages[2].content, "回答");
+        assert.equal(capturedMessages[1].role, 'user');
+        assert.equal(capturedMessages[1].content, '質問');
+        assert.equal(capturedMessages[2].role, 'assistant');
+        assert.equal(capturedMessages[2].content, '回答');
     });
 });
