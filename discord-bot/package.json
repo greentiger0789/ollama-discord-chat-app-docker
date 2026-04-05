@@ -11,7 +11,7 @@
         "discord.js": "^14.26.2",
         "dotenv": "^17.4.0",
         "@discordjs/rest": "^2.6.1",
-        "discord-api-types": "^0.38.40",
+        "discord-api-types": "^0.38.44",
         "@tavily/core": "^0.7.2",
         "js-yaml": "^4.1.1",
         "node-fetch": "^3.3.2"
