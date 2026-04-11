@@ -99,6 +99,7 @@ docker compose up -d
 ```
 .
 ├── README.md                    # このファイル
+├── Makefile                     # 開発・lint・テスト用コマンド
 ├── docker-compose.yml           # Docker Compose 設定
 ├── Dockerfile                   # Ollama サーバー用 Dockerfile
 ├── ollama-entrypoint.sh        # Ollama 起動スクリプト
@@ -194,6 +195,12 @@ docker compose up -d
 ### Docker Compose で実行
 
 ```bash
+# Makefile を使用（推奨）
+make up            # コンテナ起動（バックグラウンド）
+make dev           # 開発モード（ログ付き）
+make down          # コンテナ停止
+
+# または直接実行
 # 環境変数ファイルを作成
 cp .env.example .env
 # .env を編集して環境変数を設定
@@ -300,6 +307,11 @@ models:
 ## テスト
 
 ```bash
+# Makefile を使用（推奨）
+make test          # テスト実行（新規コンテナ）
+make test-quick    # テスト実行（起動済みコンテナ）
+
+# または直接実行
 # プロジェクトルートで実行（ホスト側から）
 docker compose run --build --rm --no-deps discord-bot npm test
 ```
@@ -313,6 +325,13 @@ docker compose exec discord-bot npm test
 Lint は以下で実行できます。
 
 ```bash
+# Makefile を使用（推奨）
+make lint          # 全てのlintを実行
+make lint-js       # JavaScript lint のみ
+make lint-actions  # GitHub Actions lint のみ
+make lint-docker   # Dockerfile lint のみ
+
+# または個別に実行
 # JavaScript / package.json
 docker compose run --build --rm --no-deps discord-bot npm run lint
 
@@ -343,8 +362,8 @@ docker run --rm -v "$PWD:/repo" -w /repo hadolint/hadolint:v2.14.0 hadolint /rep
 
 - **トリガー**: `main` および `master` ブランチへの push / pull_request
 - **JavaScript Lint**: `discord-bot` で `Biome` を実行
-- **Workflow Lint**: `actionlint` で GitHub Actions workflow を検証
-- **Dockerfile Lint**: `hadolint` で両方の Dockerfile を検証
+- **Workflow Lint**: `make lint-actions` で GitHub Actions workflow を検証
+- **Dockerfile Lint**: `make lint-docker` で両方の Dockerfile を検証
 - **テスト実行**: `npm test`
 - **Docker Build Check**: `discord-bot` イメージのビルド確認
 
