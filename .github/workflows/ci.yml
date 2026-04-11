@@ -17,8 +17,6 @@ on:
 
 env:
   NODE_VERSION: 24
-  ACTIONLINT_VERSION: 1.7.12
-  HADOLINT_VERSION: 2.14.0
 
 jobs:
   test:
@@ -48,7 +46,7 @@ jobs:
       - name: Run tests
         run: npm test
 
-  actionlint:
+  lint-actions:
     name: GitHub Actions Lint
     runs-on: ubuntu-latest
 
@@ -56,28 +54,25 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Run actionlint
-        run: docker run --rm -v "${{ github.workspace }}:/repo" -w /repo rhysd/actionlint:${{ env.ACTIONLINT_VERSION }}
+        run: make lint-actions
 
-  hadolint:
+  lint-docker:
     name: Dockerfile Lint
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v6
 
-      - name: Lint root Dockerfile
-        run: docker run --rm -v "${{ github.workspace }}:/repo" -w /repo hadolint/hadolint:v${{ env.HADOLINT_VERSION }} hadolint /repo/Dockerfile
-
-      - name: Lint discord-bot Dockerfile
-        run: docker run --rm -v "${{ github.workspace }}:/repo" -w /repo hadolint/hadolint:v${{ env.HADOLINT_VERSION }} hadolint /repo/discord-bot/Dockerfile
+      - name: Run hadolint
+        run: make lint-docker
 
   docker-build:
     name: Docker Build Check
     runs-on: ubuntu-latest
     needs:
       - test
-      - actionlint
-      - hadolint
+      - lint-actions
+      - lint-docker
 
     steps:
       - uses: actions/checkout@v6
