@@ -15,6 +15,12 @@ const MODEL_CONFIG_CANDIDATES = [
 const DEFAULT_REQUEST_TIMEOUT_MS = 300000;
 const THINKING_RETRY_MIN_BUMP = 2048;
 const THINKING_RETRY_MAX_NUM_PREDICT = 16384;
+const SEARCH_NO_RESULTS_MESSAGE = '検索結果が見つかりませんでした。';
+const TAVILY_SEARCH_FAILED_MESSAGE = 'Tavily検索に失敗しました。';
+const DDG_SEARCH_FAILED_MESSAGE = 'DuckDuckGo検索に失敗しました。';
+const SEARCH_STATUS_SUCCESS = 'success';
+const SEARCH_STATUS_NO_RESULTS = 'no_results';
+const SEARCH_STATUS_ERROR = 'error';
 let MODEL_CONFIG = {};
 
 try {
@@ -221,14 +227,30 @@ async function decideSearchPlan(client, model, prompt) {
 export async function executeSearchWithDeps(plan, tavilyClient, httpClient) {
     if (!plan.searchQuery) return '検索クエリが無効です。';
     if (plan.engine === 'ddg') return await searchDuckDuckGoWithDeps(plan.searchQuery, httpClient);
-    return await searchTavilyWithDeps(plan.searchQuery, tavilyClient);
+
+    const tavilyResult = await executeTavilySearch(plan.searchQuery, tavilyClient);
+    if (tavilyResult.status !== SEARCH_STATUS_ERROR || tavilyResult.reason === 'unconfigured') {
+        return tavilyResult.message;
+    }
+
+    const ddgResult = await executeDuckDuckGoSearch(plan.searchQuery, httpClient);
+    return ddgResult.status === SEARCH_STATUS_SUCCESS ? ddgResult.message : tavilyResult.message;
 }
 
 export async function searchTavilyWithDeps(query, tavilyClient) {
+    const result = await executeTavilySearch(query, tavilyClient);
+    return result.message;
+}
+
+async function executeTavilySearch(query, tavilyClient) {
     try {
         if (!tavilyClient?.search) {
             console.warn('Tavily search skipped because TAVILY_API_KEY is not configured.');
-            return 'Tavily検索に失敗しました。';
+            return {
+                status: SEARCH_STATUS_ERROR,
+                reason: 'unconfigured',
+                message: TAVILY_SEARCH_FAILED_MESSAGE
+            };
         }
 
         const response = await tavilyClient.search(query, {
@@ -237,7 +259,12 @@ export async function searchTavilyWithDeps(query, tavilyClient) {
             includeAnswer: false
         });
 
-        if (!response?.results?.length) return '検索結果が見つかりませんでした。';
+        if (!response?.results?.length) {
+            return {
+                status: SEARCH_STATUS_NO_RESULTS,
+                message: SEARCH_NO_RESULTS_MESSAGE
+            };
+        }
 
         const formatted = response.results
             .map(
@@ -248,14 +275,26 @@ URL: ${r.url}`
             )
             .join('\n\n');
 
-        return truncate(formatted, 4000);
+        return {
+            status: SEARCH_STATUS_SUCCESS,
+            message: truncate(formatted, 4000)
+        };
     } catch (err) {
         console.error('Tavily Error:', err.message);
-        return 'Tavily検索に失敗しました。';
+        return {
+            status: SEARCH_STATUS_ERROR,
+            reason: 'runtime',
+            message: TAVILY_SEARCH_FAILED_MESSAGE
+        };
     }
 }
 
 export async function searchDuckDuckGoWithDeps(query, httpClient) {
+    const result = await executeDuckDuckGoSearch(query, httpClient);
+    return result.message;
+}
+
+async function executeDuckDuckGoSearch(query, httpClient) {
     try {
         const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
         const res = await httpClient.get(url);
@@ -269,10 +308,23 @@ export async function searchDuckDuckGoWithDeps(query, httpClient) {
             .map(t => t.Text)
             .join('\n');
 
-        return results || '検索結果が見つかりませんでした。';
+        if (!results) {
+            return {
+                status: SEARCH_STATUS_NO_RESULTS,
+                message: SEARCH_NO_RESULTS_MESSAGE
+            };
+        }
+
+        return {
+            status: SEARCH_STATUS_SUCCESS,
+            message: results
+        };
     } catch (err) {
         console.error('DDG Error:', err.message);
-        return 'DuckDuckGo検索に失敗しました。';
+        return {
+            status: SEARCH_STATUS_ERROR,
+            message: DDG_SEARCH_FAILED_MESSAGE
+        };
     }
 }
 
