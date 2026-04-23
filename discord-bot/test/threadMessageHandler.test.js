@@ -632,4 +632,61 @@ describe('threadMessageHandler', () => {
             );
         });
     });
+
+    describe('logging', () => {
+        test('should log thread follow-up lifecycle at info level', async () => {
+            const originalConsoleInfo = console.info;
+            const originalLogLevel = process.env.LOG_LEVEL;
+            const infoLogs = [];
+
+            console.info = (...args) => {
+                infoLogs.push(args);
+            };
+            process.env.LOG_LEVEL = 'info';
+
+            try {
+                const mockMessage = {
+                    channel: {
+                        isThread: () => true,
+                        id: 'thread-log-2',
+                        send: async () => ({ edit: async () => {} })
+                    },
+                    author: {
+                        bot: false,
+                        id: 'user-2'
+                    },
+                    content: 'ログテスト'
+                };
+
+                await handleThreadMessage(mockMessage, {
+                    buildMaidThinkingMessage: () => '思考中...',
+                    sendSplitMessage: async () => {},
+                    generateResponse: async () => 'ログ応答',
+                    addToThreadHistory: () => {},
+                    getThreadHistory: () => []
+                });
+            } finally {
+                console.info = originalConsoleInfo;
+                if (originalLogLevel === undefined) {
+                    delete process.env.LOG_LEVEL;
+                } else {
+                    process.env.LOG_LEVEL = originalLogLevel;
+                }
+            }
+
+            const handlingLog = infoLogs.find(
+                ([message]) => message === 'Handling thread follow-up message'
+            );
+            const completedLog = infoLogs.find(
+                ([message]) => message === 'Completed thread follow-up response'
+            );
+
+            assert.ok(handlingLog);
+            assert.ok(completedLog);
+            assert.equal(handlingLog[1]?.scope, 'threadMessageHandler');
+            assert.equal(handlingLog[1]?.threadId, 'thread-log-2');
+            assert.equal(handlingLog[1]?.authorId, 'user-2');
+            assert.equal(completedLog[1]?.responseLength, 4);
+        });
+    });
 });

@@ -193,4 +193,68 @@ describe('oCommand', () => {
             );
         });
     });
+
+    describe('logging', () => {
+        test('should log command lifecycle at info level', async () => {
+            const originalConsoleInfo = console.info;
+            const originalLogLevel = process.env.LOG_LEVEL;
+            const infoLogs = [];
+
+            console.info = (...args) => {
+                infoLogs.push(args);
+            };
+            process.env.LOG_LEVEL = 'info';
+
+            try {
+                const thread = {
+                    id: 'thread-log-1',
+                    send: async () => ({ edit: async () => {} })
+                };
+
+                const mockInteraction = {
+                    options: { getString: () => 'ログ確認' },
+                    deferReply: async () => {},
+                    followUp: async () => ({
+                        startThread: async () => thread
+                    }),
+                    user: { id: 'user-1', username: 'testuser' }
+                };
+
+                const mockHandleOCommand = createHandleOCommand({
+                    generateResponse: async () => 'ログ応答',
+                    getThreadHistory: () => [],
+                    addToThreadHistory: () => {},
+                    initializeThread: () => {},
+                    buildMaidThinkingMessage: () => '思考中...',
+                    sendSplitMessage: async () => {}
+                });
+
+                await mockHandleOCommand(mockInteraction);
+            } finally {
+                console.info = originalConsoleInfo;
+                if (originalLogLevel === undefined) {
+                    delete process.env.LOG_LEVEL;
+                } else {
+                    process.env.LOG_LEVEL = originalLogLevel;
+                }
+            }
+
+            const receivedLog = infoLogs.find(([message]) => message === 'Received /o command');
+            const threadLog = infoLogs.find(
+                ([message]) => message === 'Created response thread for /o command'
+            );
+            const completedLog = infoLogs.find(
+                ([message]) => message === 'Completed /o command response'
+            );
+
+            assert.ok(receivedLog);
+            assert.ok(threadLog);
+            assert.ok(completedLog);
+            assert.equal(receivedLog[1]?.scope, 'oCommand');
+            assert.equal(receivedLog[1]?.userId, 'user-1');
+            assert.equal(receivedLog[1]?.promptLength, 4);
+            assert.equal(threadLog[1]?.threadId, 'thread-log-1');
+            assert.equal(completedLog[1]?.responseLength, 4);
+        });
+    });
 });

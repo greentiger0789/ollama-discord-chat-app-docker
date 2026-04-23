@@ -3,6 +3,7 @@ import test, { afterEach, describe } from 'node:test';
 
 const originalToken = process.env.DISCORD_TOKEN;
 const originalGuildId = process.env.DISCORD_GUILD_ID;
+const originalLogLevel = process.env.LOG_LEVEL;
 
 function restoreEnv() {
     if (originalToken === undefined) {
@@ -15,6 +16,12 @@ function restoreEnv() {
         delete process.env.DISCORD_GUILD_ID;
     } else {
         process.env.DISCORD_GUILD_ID = originalGuildId;
+    }
+
+    if (originalLogLevel === undefined) {
+        delete process.env.LOG_LEVEL;
+    } else {
+        process.env.LOG_LEVEL = originalLogLevel;
     }
 }
 
@@ -147,6 +154,7 @@ describe('createRegisterCommands', () => {
         const originalConsoleError = console.error;
         const logged = [];
         let putCalled = false;
+        process.env.LOG_LEVEL = 'error';
 
         console.error = (...args) => {
             logged.push(args);
@@ -169,8 +177,9 @@ describe('createRegisterCommands', () => {
 
         assert.equal(putCalled, false);
         assert.equal(logged.length, 1);
-        assert.equal(logged[0][0], 'Failed to register commands');
+        assert.match(String(logged[0][0]), /Failed to register commands/);
         assert.match(String(logged[0][1]?.message), /Discord application is not ready/);
+        assert.equal(logged[0][2]?.scope, 'discordClient');
     });
 });
 
