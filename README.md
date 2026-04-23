@@ -77,6 +77,9 @@ OLLAMA_MODEL=qwen3.5:9b
 
 # Tavily (オプション)
 TAVILY_API_KEY=your_tavily_api_key
+
+# Logging (オプション)
+LOG_LEVEL=info # debug / info / warn / error / silent
 ```
 
 > **参考**: `.env.example` ファイルの内容を参考にしてください。

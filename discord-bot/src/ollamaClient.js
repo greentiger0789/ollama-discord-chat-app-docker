@@ -5,6 +5,7 @@ import { tavily } from '@tavily/core';
 import yaml from 'js-yaml';
 import fetch from 'node-fetch';
 import { decisionPrompt } from './decisionPrompt.js';
+import { createLogger } from './logger.js';
 import { SYSTEM_PROMPT } from './systemPrompt.js';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -21,6 +22,7 @@ const DDG_SEARCH_FAILED_MESSAGE = 'DuckDuckGo検索に失敗しました。';
 const SEARCH_STATUS_SUCCESS = 'success';
 const SEARCH_STATUS_NO_RESULTS = 'no_results';
 const SEARCH_STATUS_ERROR = 'error';
+const logger = createLogger('ollamaClient');
 let MODEL_CONFIG = {};
 
 try {
@@ -30,8 +32,14 @@ try {
     }
     const file = fs.readFileSync(MODEL_CONFIG_PATH, 'utf8');
     MODEL_CONFIG = yaml.load(file)?.models || {};
+    logger.info('Loaded model config', {
+        path: MODEL_CONFIG_PATH,
+        modelCount: Object.keys(MODEL_CONFIG).length
+    });
 } catch (err) {
-    console.warn(`Model config load failed. Using defaults. ${err.message}`);
+    logger.warn('Model config load failed. Using defaults.', err, {
+        candidates: MODEL_CONFIG_CANDIDATES
+    });
 }
 
 function createTavilyClient(apiKey = process.env.TAVILY_API_KEY) {
@@ -85,6 +93,12 @@ export default function createOllamaClient({
         if (historyTokens + promptTokens > LIMIT && history.length > 1) {
             // 🔥 最新userは除外
             const oldHistory = history.slice(0, -1);
+            logger.info('Summarizing conversation history', {
+                model,
+                historyCount: history.length,
+                estimatedTokens: historyTokens + promptTokens,
+                limit: LIMIT
+            });
 
             const summary = await summarizeHistory(client, model, oldHistory);
 
@@ -143,14 +157,15 @@ export default function createOllamaClient({
             if (content !== null) return content;
 
             if (hasThinkingOnlyResponse(data)) {
-                console.warn(
-                    'Assistant response exhausted in thinking mode:',
-                    summarizeResponseShape(data)
-                );
+                logger.warn('Assistant response exhausted in thinking mode', {
+                    response: summarizeResponseShape(data)
+                });
                 return '回答本文を取得できませんでした。';
             }
 
-            console.error('Unknown response format:', summarizeResponseShape(data));
+            logger.error('Unknown assistant response format', {
+                response: summarizeResponseShape(data)
+            });
             return '回答形式を解析できませんでした。';
         } catch (err) {
             if (err.response?.data) {
@@ -205,18 +220,33 @@ async function decideSearchPlan(client, model, prompt) {
         const raw = res.data?.message?.content || res.data?.choices?.[0]?.message?.content || '{}';
 
         const parsed = safeJsonParse(raw);
-
-        return {
+        const plan = {
             needSearch: hasForceKeyword || !!parsed.needSearch,
             engine: parsed.engine === 'ddg' ? 'ddg' : 'tavily',
             searchQuery: parsed.searchQuery || prompt
         };
-    } catch {
-        return {
+        logger.info('Search plan decided', {
+            model,
+            needSearch: plan.needSearch,
+            engine: plan.engine,
+            forcedByKeyword: hasForceKeyword,
+            query: summarizeQuery(plan.searchQuery)
+        });
+        return plan;
+    } catch (err) {
+        const fallbackPlan = {
             needSearch: hasForceKeyword,
             engine: 'tavily',
             searchQuery: prompt
         };
+        logger.warn('Search plan generation failed. Using fallback plan.', err, {
+            model,
+            needSearch: fallbackPlan.needSearch,
+            engine: fallbackPlan.engine,
+            forcedByKeyword: hasForceKeyword,
+            query: summarizeQuery(fallbackPlan.searchQuery)
+        });
+        return fallbackPlan;
     }
 }
 
@@ -225,15 +255,44 @@ async function decideSearchPlan(client, model, prompt) {
 /* ===================================================== */
 
 export async function executeSearchWithDeps(plan, tavilyClient, httpClient) {
-    if (!plan.searchQuery) return '検索クエリが無効です。';
-    if (plan.engine === 'ddg') return await searchDuckDuckGoWithDeps(plan.searchQuery, httpClient);
+    if (!plan.searchQuery) {
+        logger.warn('Search skipped because the query is invalid', {
+            engine: plan.engine || 'unknown'
+        });
+        return '検索クエリが無効です。';
+    }
+    if (plan.engine === 'ddg') {
+        logger.info('Using DuckDuckGo for web search', {
+            query: summarizeQuery(plan.searchQuery)
+        });
+        return await searchDuckDuckGoWithDeps(plan.searchQuery, httpClient);
+    }
+
+    logger.info('Using Tavily for web search', {
+        query: summarizeQuery(plan.searchQuery)
+    });
 
     const tavilyResult = await executeTavilySearch(plan.searchQuery, tavilyClient);
     if (tavilyResult.status !== SEARCH_STATUS_ERROR || tavilyResult.reason === 'unconfigured') {
         return tavilyResult.message;
     }
 
+    logger.warn('Tavily search failed. Falling back to DuckDuckGo.', {
+        query: summarizeQuery(plan.searchQuery)
+    });
     const ddgResult = await executeDuckDuckGoSearch(plan.searchQuery, httpClient);
+
+    if (ddgResult.status === SEARCH_STATUS_SUCCESS) {
+        logger.info('DuckDuckGo fallback succeeded', {
+            query: summarizeQuery(plan.searchQuery)
+        });
+    } else {
+        logger.warn('DuckDuckGo fallback did not recover Tavily failure', {
+            query: summarizeQuery(plan.searchQuery),
+            status: ddgResult.status
+        });
+    }
+
     return ddgResult.status === SEARCH_STATUS_SUCCESS ? ddgResult.message : tavilyResult.message;
 }
 
@@ -245,7 +304,9 @@ export async function searchTavilyWithDeps(query, tavilyClient) {
 async function executeTavilySearch(query, tavilyClient) {
     try {
         if (!tavilyClient?.search) {
-            console.warn('Tavily search skipped because TAVILY_API_KEY is not configured.');
+            logger.warn('Tavily search skipped because TAVILY_API_KEY is not configured.', {
+                query: summarizeQuery(query)
+            });
             return {
                 status: SEARCH_STATUS_ERROR,
                 reason: 'unconfigured',
@@ -253,6 +314,9 @@ async function executeTavilySearch(query, tavilyClient) {
             };
         }
 
+        logger.info('Calling Tavily search', {
+            query: summarizeQuery(query)
+        });
         const response = await tavilyClient.search(query, {
             searchDepth: 'advanced',
             maxResults: 5,
@@ -260,6 +324,9 @@ async function executeTavilySearch(query, tavilyClient) {
         });
 
         if (!response?.results?.length) {
+            logger.info('Tavily search returned no results', {
+                query: summarizeQuery(query)
+            });
             return {
                 status: SEARCH_STATUS_NO_RESULTS,
                 message: SEARCH_NO_RESULTS_MESSAGE
@@ -275,12 +342,18 @@ URL: ${r.url}`
             )
             .join('\n\n');
 
+        logger.info('Tavily search succeeded', {
+            query: summarizeQuery(query),
+            resultCount: response.results.length
+        });
         return {
             status: SEARCH_STATUS_SUCCESS,
             message: truncate(formatted, 4000)
         };
     } catch (err) {
-        console.error('Tavily Error:', err.message);
+        logger.error('Tavily search failed', err, {
+            query: summarizeQuery(query)
+        });
         return {
             status: SEARCH_STATUS_ERROR,
             reason: 'runtime',
@@ -296,31 +369,39 @@ export async function searchDuckDuckGoWithDeps(query, httpClient) {
 
 async function executeDuckDuckGoSearch(query, httpClient) {
     try {
+        logger.info('Calling DuckDuckGo search', {
+            query: summarizeQuery(query)
+        });
         const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
         const res = await httpClient.get(url);
 
-        const topics = res.data.RelatedTopics || [];
-        const flattened = topics.flatMap(t => t.Topics || t);
+        const topics = Array.isArray(res.data?.RelatedTopics) ? res.data.RelatedTopics : [];
+        const results = flattenDuckDuckGoTopics(topics)
+            .filter(topic => topic?.Text)
+            .slice(0, 5);
 
-        const results = flattened
-            .filter(t => t.Text)
-            .slice(0, 5)
-            .map(t => t.Text)
-            .join('\n');
-
-        if (!results) {
+        if (!results.length) {
+            logger.info('DuckDuckGo search returned no results', {
+                query: summarizeQuery(query)
+            });
             return {
                 status: SEARCH_STATUS_NO_RESULTS,
                 message: SEARCH_NO_RESULTS_MESSAGE
             };
         }
 
+        logger.info('DuckDuckGo search succeeded', {
+            query: summarizeQuery(query),
+            resultCount: results.length
+        });
         return {
             status: SEARCH_STATUS_SUCCESS,
-            message: results
+            message: results.map(topic => topic.Text).join('\n')
         };
     } catch (err) {
-        console.error('DDG Error:', err.message);
+        logger.error('DuckDuckGo search failed', err, {
+            query: summarizeQuery(query)
+        });
         return {
             status: SEARCH_STATUS_ERROR,
             message: DDG_SEARCH_FAILED_MESSAGE
@@ -471,7 +552,7 @@ async function requestAssistantContentWithRetry(client, payload) {
         return { content: null, data: res.data };
     }
 
-    console.warn('Assistant response exhausted in thinking mode, retrying:', {
+    logger.warn('Assistant response exhausted in thinking mode, retrying', {
         ...summarizeResponseShape(res.data),
         retry_num_predict: retryOptions.num_predict
     });
@@ -527,6 +608,19 @@ function stripThinkTags(text) {
 export function truncate(text, maxLength) {
     if (!text) return '';
     return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+}
+
+function summarizeQuery(query, maxLength = 120) {
+    return truncate(
+        String(query || '')
+            .replace(/\s+/g, ' ')
+            .trim(),
+        maxLength
+    );
+}
+
+function flattenDuckDuckGoTopics(topics = []) {
+    return topics.flatMap(topic => (Array.isArray(topic?.Topics) ? topic.Topics : [topic]));
 }
 
 async function streamToString(stream) {
@@ -657,6 +751,12 @@ async function postChat(client, payload, { think = true } = {}) {
         });
     } catch (err) {
         if (isUnsupportedThinkParameterError(err)) {
+            logger.warn(
+                'Chat endpoint does not support the think parameter. Retrying without it.',
+                {
+                    model: payload.model
+                }
+            );
             return await client.post('/api/chat', payload);
         }
 
