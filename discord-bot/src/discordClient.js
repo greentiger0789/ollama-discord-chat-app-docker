@@ -1,13 +1,15 @@
 import { REST } from '@discordjs/rest';
 import { Client, GatewayIntentBits } from 'discord.js';
 import { Routes } from 'discord-api-types/v10';
+import { createLogger } from './logger.js';
 import './loadEnv.js';
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const GUILD_ID = process.env.DISCORD_GUILD_ID;
+const logger = createLogger('discordClient');
 
 if (!DISCORD_TOKEN) {
-    console.error('DISCORD_TOKEN is required');
+    logger.error('DISCORD_TOKEN is required');
     process.exit(1);
 }
 
@@ -56,17 +58,37 @@ export function createRegisterCommands({
             }
 
             if (guildId && /^[0-9]+$/.test(guildId)) {
+                logger.info('Registering commands to guild', {
+                    guildId,
+                    commandCount: commandList.length
+                });
                 await restClient.put(routes.applicationGuildCommands(appId, guildId), {
                     body: commandList
                 });
-                console.log('Registered commands to guild', guildId);
+                logger.info('Registered commands to guild', {
+                    guildId,
+                    commandCount: commandList.length
+                });
                 return;
             }
 
+            if (guildId) {
+                logger.warn('DISCORD_GUILD_ID is invalid. Falling back to global commands.', {
+                    guildId
+                });
+            }
+
+            logger.info('Registering global commands', {
+                commandCount: commandList.length
+            });
             await restClient.put(routes.applicationCommands(appId), { body: commandList });
-            console.log('Registered global commands');
+            logger.info('Registered global commands', {
+                commandCount: commandList.length
+            });
         } catch (err) {
-            console.error('Failed to register commands', err);
+            logger.error('Failed to register commands', err, {
+                guildId: guildId || null
+            });
         }
     };
 }

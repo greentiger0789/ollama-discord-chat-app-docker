@@ -1,6 +1,9 @@
+import { createLogger } from '../logger.js';
 import { buildMaidThinkingMessage, sendSplitMessage } from '../messageUtils.js';
 import { generateResponse } from '../ollamaClient.js';
 import { addToThreadHistory, getThreadHistory, initializeThread } from '../threadManager.js';
+
+const logger = createLogger('oCommand');
 
 // デフォルトの依存関係
 const defaultDeps = {
@@ -24,6 +27,10 @@ export function createHandleOCommand(deps = defaultDeps) {
 
     return async function handleOCommand(interaction) {
         const prompt = interaction.options.getString('prompt');
+        logger.info('Received /o command', {
+            userId: interaction.user?.id || null,
+            promptLength: prompt?.length || 0
+        });
 
         await interaction.deferReply();
 
@@ -35,6 +42,10 @@ export function createHandleOCommand(deps = defaultDeps) {
             const thread = await replyMsg.startThread({
                 name: `o-${interaction.user.username}-${Date.now() % 10000}`,
                 autoArchiveDuration: 60
+            });
+            logger.info('Created response thread for /o command', {
+                threadId: thread.id,
+                userId: interaction.user?.id || null
             });
 
             initializeThread(thread.id);
@@ -50,8 +61,14 @@ export function createHandleOCommand(deps = defaultDeps) {
             addToThreadHistory(thread.id, { role: 'assistant', text: responseText });
 
             await sendSplitMessage(thread, responseText, thinkingMsg);
+            logger.info('Completed /o command response', {
+                threadId: thread.id,
+                responseLength: responseText.length
+            });
         } catch (err) {
-            console.error('Error handling /o command', err);
+            logger.error('Error handling /o command', err, {
+                userId: interaction.user?.id || null
+            });
             await interaction
                 .followUp({
                     content: 'エラーが発生しました。',

@@ -2,13 +2,18 @@ import './src/loadEnv.js';
 import { handleOCommand } from './src/commands/oCommand.js';
 import { client, DISCORD_TOKEN, registerCommands } from './src/discordClient.js';
 import { handleThreadMessage } from './src/handlers/threadMessageHandler.js';
+import { createLogger } from './src/logger.js';
+
+const logger = createLogger('index');
 
 /* ========================================================= */
 /* Ready */
 /* ========================================================= */
 
 client.once('clientReady', async () => {
-    console.log('Logged in as', client.user.tag);
+    logger.info('Discord client is ready', {
+        userTag: client.user.tag
+    });
     await registerCommands();
 });
 
@@ -36,12 +41,12 @@ client.on('messageCreate', async message => {
 /* ========================================================= */
 
 process.on('SIGTERM', () => {
-    console.log('Shutting down');
+    logger.info('Received SIGTERM. Shutting down Discord client.');
     client.destroy();
     process.exit(0);
 });
 
 client.login(DISCORD_TOKEN).catch(e => {
-    console.error('Login failed', e);
+    logger.error('Login failed', e);
     process.exit(1);
 });
