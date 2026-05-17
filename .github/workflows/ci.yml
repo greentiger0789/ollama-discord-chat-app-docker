@@ -19,11 +19,11 @@ permissions:
   contents: read
 
 env:
-  NODE_VERSION: 24
+  NODE_VERSION: 26
 
 jobs:
   test:
-    name: Test (Node.js 24)
+    name: Test (Node.js 26)
     runs-on: ubuntu-latest
 
     defaults:
