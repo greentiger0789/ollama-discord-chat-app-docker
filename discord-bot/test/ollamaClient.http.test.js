@@ -208,7 +208,7 @@ describe('ollamaClient search formatting', () => {
 });
 
 describe('ollamaClient search fallback', () => {
-    test('executeSearchWithDeps should keep Tavily error when Tavily client is missing', async () => {
+    test('executeSearchWithDeps should fall back to DuckDuckGo when Tavily client is missing', async () => {
         let ddgCalled = false;
 
         const result = await executeSearchWithDeps(
@@ -226,8 +226,8 @@ describe('ollamaClient search fallback', () => {
             }
         );
 
-        assert.equal(result, 'Tavily検索に失敗しました。');
-        assert.equal(ddgCalled, false);
+        assert.equal(result, 'DuckDuckGo fallback result');
+        assert.equal(ddgCalled, true);
     });
 
     test('executeSearchWithDeps should fall back to DuckDuckGo when Tavily search throws', async () => {
