@@ -4,9 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { tavily } from '@tavily/core';
 import yaml from 'js-yaml';
 import fetch from 'node-fetch';
-import { decisionPrompt } from './decisionPrompt.js';
 import { createLogger } from './logger.js';
-import { SYSTEM_PROMPT } from './systemPrompt.js';
+import { decisionPrompt, SYSTEM_PROMPT } from './prompts.js';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const MODEL_CONFIG_CANDIDATES = [
