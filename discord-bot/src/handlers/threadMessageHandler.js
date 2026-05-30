@@ -4,8 +4,33 @@ import * as ollamaClient from '../ollamaClient.js';
 import * as threadManager from '../threadManager.js';
 
 const logger = createLogger('threadMessageHandler');
+const threadQueues = new Map();
 
 export async function handleThreadMessage(message, deps = {}) {
+    if (!message.channel.isThread()) return;
+    if (message.author.bot) return;
+
+    const threadId = message.channel.id;
+    return await enqueueThreadTask(threadId, () => processThreadMessage(message, deps));
+}
+
+function enqueueThreadTask(threadId, task) {
+    const previousTask = threadQueues.get(threadId) || Promise.resolve();
+    const queuedTask = previousTask.catch(() => {}).then(task);
+
+    threadQueues.set(threadId, queuedTask);
+    queuedTask
+        .finally(() => {
+            if (threadQueues.get(threadId) === queuedTask) {
+                threadQueues.delete(threadId);
+            }
+        })
+        .catch(() => {});
+
+    return queuedTask;
+}
+
+async function processThreadMessage(message, deps = {}) {
     const {
         buildMaidThinkingMessage = messageUtils.buildMaidThinkingMessage,
         sendSplitMessage = messageUtils.sendSplitMessage,
@@ -13,9 +38,6 @@ export async function handleThreadMessage(message, deps = {}) {
         addToThreadHistory = threadManager.addToThreadHistory,
         getThreadHistory = threadManager.getThreadHistory
     } = deps;
-
-    if (!message.channel.isThread()) return;
-    if (message.author.bot) return;
 
     const threadId = message.channel.id;
     const history = getThreadHistory(threadId);

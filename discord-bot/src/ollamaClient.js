@@ -273,12 +273,13 @@ export async function executeSearchWithDeps(plan, tavilyClient, httpClient) {
     });
 
     const tavilyResult = await executeTavilySearch(plan.searchQuery, tavilyClient);
-    if (tavilyResult.status !== SEARCH_STATUS_ERROR || tavilyResult.reason === 'unconfigured') {
+    if (tavilyResult.status !== SEARCH_STATUS_ERROR) {
         return tavilyResult.message;
     }
 
     logger.warn('Tavily search failed. Falling back to DuckDuckGo.', {
-        query: summarizeQuery(plan.searchQuery)
+        query: summarizeQuery(plan.searchQuery),
+        reason: tavilyResult.reason || 'unknown'
     });
     const ddgResult = await executeDuckDuckGoSearch(plan.searchQuery, httpClient);
 

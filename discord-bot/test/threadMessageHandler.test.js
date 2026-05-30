@@ -7,6 +7,17 @@ async function importFreshThreadManager() {
     return await import(`${modulePath.href}?t=${Date.now()}-${Math.random()}`);
 }
 
+function createDeferred() {
+    let resolve;
+    let reject;
+    const promise = new Promise((res, rej) => {
+        resolve = res;
+        reject = rej;
+    });
+
+    return { promise, resolve, reject };
+}
+
 describe('threadMessageHandler', () => {
     let originalConsoleError;
 
@@ -475,6 +486,84 @@ describe('threadMessageHandler', () => {
                 { role: 'assistant', text: '以前の応答' },
                 { role: 'user', text: '新しいメッセージ' },
                 { role: 'assistant', text: '新しい応答' }
+            ]);
+        });
+
+        test('should serialize concurrent messages in the same thread', async () => {
+            const threadManager = await importFreshThreadManager();
+            const threadId = 'thread-history-queued';
+            const firstStarted = createDeferred();
+            const firstRelease = createDeferred();
+            const secondStarted = createDeferred();
+            const generateCalls = [];
+
+            threadManager.initializeThread(threadId);
+
+            const buildMessage = content => ({
+                channel: {
+                    isThread: () => true,
+                    id: threadId,
+                    send: async () => ({ edit: async () => {} })
+                },
+                author: {
+                    bot: false
+                },
+                content
+            });
+
+            const deps = {
+                buildMaidThinkingMessage: () => '🧹 考え中...',
+                sendSplitMessage: async () => {},
+                generateResponse: async (content, history) => {
+                    generateCalls.push({ content, history });
+
+                    if (content === 'first') {
+                        firstStarted.resolve();
+                        await firstRelease.promise;
+                    } else {
+                        secondStarted.resolve();
+                    }
+
+                    return `${content}-response`;
+                },
+                addToThreadHistory: threadManager.addToThreadHistory,
+                getThreadHistory: threadManager.getThreadHistory
+            };
+
+            const firstPromise = handleThreadMessage(buildMessage('first'), deps);
+            await firstStarted.promise;
+
+            const secondPromise = handleThreadMessage(buildMessage('second'), deps);
+            await Promise.resolve();
+
+            assert.equal(
+                generateCalls.length,
+                1,
+                'Second message should wait until the first response finishes'
+            );
+
+            firstRelease.resolve();
+            await secondStarted.promise;
+            await Promise.all([firstPromise, secondPromise]);
+
+            assert.deepEqual(generateCalls, [
+                {
+                    content: 'first',
+                    history: []
+                },
+                {
+                    content: 'second',
+                    history: [
+                        { role: 'user', text: 'first' },
+                        { role: 'assistant', text: 'first-response' }
+                    ]
+                }
+            ]);
+            assert.deepEqual(threadManager.getThreadHistory(threadId), [
+                { role: 'user', text: 'first' },
+                { role: 'assistant', text: 'first-response' },
+                { role: 'user', text: 'second' },
+                { role: 'assistant', text: 'second-response' }
             ]);
         });
     });
