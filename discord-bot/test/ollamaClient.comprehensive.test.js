@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { after, before, describe } from 'node:test';
 import createOllamaClient from '../src/ollamaClient.js';
+import { decisionPrompt, SYSTEM_PROMPT } from '../src/prompts.js';
 
 // console出力を抑制（モジュール読み込み前に設定）
 let originalConsoleError;
@@ -732,8 +733,25 @@ describe('generate() model options', () => {
 describe('generate() message construction', () => {
     test('should include system prompt in messages', async () => {
         let capturedMessages = null;
+        let callCount = 0;
 
         mockPostHandler = async (_url, data) => {
+            callCount++;
+
+            if (callCount === 1) {
+                return {
+                    data: {
+                        message: {
+                            content: JSON.stringify({
+                                needSearch: false,
+                                engine: 'tavily',
+                                searchQuery: ''
+                            })
+                        }
+                    }
+                };
+            }
+
             capturedMessages = data.messages;
             return {
                 data: {
@@ -752,13 +770,60 @@ describe('generate() message construction', () => {
 
         assert.ok(capturedMessages.length > 0);
         assert.equal(capturedMessages[0].role, 'system');
-        assert.ok(capturedMessages[0].content.includes('メイドちゃん'));
+        assert.equal(capturedMessages[0].content, SYSTEM_PROMPT);
+    });
+
+    test('should include decision prompt in search planning request', async () => {
+        let capturedMessages = null;
+
+        mockPostHandler = async (_url, data) => {
+            capturedMessages ??= data.messages;
+
+            return {
+                data: {
+                    message: {
+                        content: JSON.stringify({
+                            needSearch: false,
+                            engine: 'tavily',
+                            searchQuery: ''
+                        })
+                    }
+                }
+            };
+        };
+
+        const client = buildClient();
+        await client.generate({
+            prompt: 'テスト',
+            history: []
+        });
+
+        assert.ok(capturedMessages.length > 0);
+        assert.equal(capturedMessages[0].role, 'system');
+        assert.equal(capturedMessages[0].content, decisionPrompt);
     });
 
     test('should map history roles correctly', async () => {
         let capturedMessages = null;
+        let callCount = 0;
 
         mockPostHandler = async (_url, data) => {
+            callCount++;
+
+            if (callCount === 1) {
+                return {
+                    data: {
+                        message: {
+                            content: JSON.stringify({
+                                needSearch: false,
+                                engine: 'tavily',
+                                searchQuery: ''
+                            })
+                        }
+                    }
+                };
+            }
+
             capturedMessages = data.messages;
             return {
                 data: {
