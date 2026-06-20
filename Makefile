@@ -15,33 +15,60 @@
 ACTIONLINT_VERSION := 1.7.12
 HADOLINT_VERSION := 2.14.0
 
+PROJECT_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
+DOCKER_COMPOSE ?= docker compose --project-directory $(PROJECT_DIR) -f $(PROJECT_DIR)/docker-compose.yml
+BOT_SERVICE ?= discord-bot
+BOT_WORKDIR ?= /app
+
+IN_BOT_CONTAINER := $(shell if [ "$${IN_DISCORD_BOT_CONTAINER:-}" = "true" ] || { [ -f /.dockerenv ] && [ -f "$(BOT_WORKDIR)/package.json" ]; }; then echo 1; else echo 0; fi)
+
+ifeq ($(IN_BOT_CONTAINER),1)
+BOT_RUN := cd $(BOT_WORKDIR) &&
+else
+BOT_RUN := $(DOCKER_COMPOSE) run --build --rm --no-deps $(BOT_SERVICE)
+endif
+
+define require_host
+	@if [ "$(IN_BOT_CONTAINER)" = "1" ]; then \
+		echo "This target controls Docker and must be run on the host: make $@"; \
+		exit 2; \
+	fi
+endef
+
 ## ============================================================================
 ## LINT TARGETS
 ## ============================================================================
 
-# Run all linters
+ifeq ($(IN_BOT_CONTAINER),1)
+lint: lint-js
+	@echo "Docker/action linters are host-only. Run make lint on the host to include them."
+else
 lint: lint-js lint-actions lint-docker
+endif
 
 # JavaScript/TypeScript lint (Biome)
 lint-js:
 	@echo "🔍 Running JavaScript lint..."
-	docker compose run --build --rm --no-deps discord-bot npm run lint
+	$(BOT_RUN) npm run lint
 
 # GitHub Actions workflow lint
 lint-actions:
 	@echo "🔍 Running GitHub Actions lint..."
-	docker run --rm -v "$$PWD:/repo" -w /repo rhysd/actionlint:$(ACTIONLINT_VERSION)
+	$(call require_host)
+	docker run --rm -v "$(PROJECT_DIR):/repo" -w /repo rhysd/actionlint:$(ACTIONLINT_VERSION)
 
 # Dockerfile lint (both Dockerfiles)
 lint-docker: lint-docker-root lint-docker-bot
 
 lint-docker-root:
 	@echo "🔍 Linting root Dockerfile..."
-	docker run --rm -v "$$PWD:/repo" -w /repo hadolint/hadolint:v$(HADOLINT_VERSION) hadolint /repo/Dockerfile
+	$(call require_host)
+	docker run --rm -v "$(PROJECT_DIR):/repo" -w /repo hadolint/hadolint:v$(HADOLINT_VERSION) hadolint /repo/Dockerfile
 
 lint-docker-bot:
 	@echo "🔍 Linting discord-bot Dockerfile..."
-	docker run --rm -v "$$PWD:/repo" -w /repo hadolint/hadolint:v$(HADOLINT_VERSION) hadolint /repo/discord-bot/Dockerfile
+	$(call require_host)
+	docker run --rm -v "$(PROJECT_DIR):/repo" -w /repo hadolint/hadolint:v$(HADOLINT_VERSION) hadolint /repo/discord-bot/Dockerfile
 
 ## ============================================================================
 ## TEST TARGETS
@@ -50,12 +77,16 @@ lint-docker-bot:
 # Run tests
 test:
 	@echo "🧪 Running tests..."
-	docker compose run --build --rm --no-deps discord-bot npm test
+	$(BOT_RUN) npm test
 
 # Run tests in running container (faster if container is already running)
 test-quick:
 	@echo "🧪 Running tests (quick mode)..."
-	docker compose exec discord-bot npm test
+ifeq ($(IN_BOT_CONTAINER),1)
+	cd $(BOT_WORKDIR) && npm test
+else
+	$(DOCKER_COMPOSE) exec $(BOT_SERVICE) npm test
+endif
 
 ## ============================================================================
 ## DOCKER TARGETS
@@ -64,28 +95,33 @@ test-quick:
 # Build containers
 build:
 	@echo "🏗️ Building containers..."
-	docker compose build
+	$(call require_host)
+	$(DOCKER_COMPOSE) build
 
 # Start containers in background
 up:
 	@echo "🚀 Starting containers..."
-	docker compose up -d
+	$(call require_host)
+	$(DOCKER_COMPOSE) up -d
 
 # Stop containers
 down:
 	@echo "🛑 Stopping containers..."
-	docker compose down
+	$(call require_host)
+	$(DOCKER_COMPOSE) down
 
 # Stop containers and remove volumes
 down-v:
 	@echo "🛑 Stopping containers and removing volumes..."
-	docker compose down -v
+	$(call require_host)
+	$(DOCKER_COMPOSE) down -v
 
 # Clean up Docker resources (WARNING: removes ALL unused Docker resources, not just this project)
 clean:
 	@echo "🧹 Cleaning up Docker resources..."
 	@echo "⚠️  This will remove ALL unused Docker resources (images, containers, networks)!"
-	docker compose down -v
+	$(call require_host)
+	$(DOCKER_COMPOSE) down -v
 	docker system prune -f
 
 ## ============================================================================
@@ -95,17 +131,22 @@ clean:
 # Start development mode with hot reload
 dev:
 	@echo "🔧 Starting development mode..."
-	docker compose up
+	$(call require_host)
+	$(DOCKER_COMPOSE) up
 
 # Shell into discord-bot container
 shell:
 	@echo "💻 Opening shell in discord-bot container..."
-	docker compose exec discord-bot /bin/sh
+ifeq ($(IN_BOT_CONTAINER),1)
+	cd $(BOT_WORKDIR) && /bin/sh
+else
+	$(DOCKER_COMPOSE) exec $(BOT_SERVICE) /bin/sh
+endif
 
 # Install dependencies (rebuild node_modules)
 install:
 	@echo "📦 Installing dependencies..."
-	docker compose run --build --rm --no-deps discord-bot npm ci
+	$(BOT_RUN) npm ci
 
 ## ============================================================================
 ## HELP
@@ -113,9 +154,11 @@ install:
 
 help:
 	@echo "Discord Ollama Bot - Available Commands"
+	@echo "App targets run via Docker on the host and directly in /app inside the discord-bot container."
+	@echo "Docker control/actionlint/hadolint targets are host-only."
 	@echo ""
 	@echo "Lint Commands:"
-	@echo "  make lint          - Run all linters"
+	@echo "  make lint          - Run linters (host: all, container: app lint)"
 	@echo "  make lint-js       - Run JavaScript/TypeScript lint (Biome)"
 	@echo "  make lint-actions  - Run GitHub Actions workflow lint"
 	@echo "  make lint-docker   - Run Dockerfile lint (hadolint)"

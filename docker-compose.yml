@@ -50,12 +50,15 @@ services:
     container_name: discord-bot
     restart: unless-stopped
     init: true
+    environment:
+      IN_DISCORD_BOT_CONTAINER: "true"
     command: node dev-runner.js
     depends_on:
       ollama:
         condition: service_healthy
     volumes:
       - ./discord-bot:/app
+      - ./Makefile:/workspace/Makefile:ro
       - ./.env:/app/.env:ro
       # Bind mount でホストのソースを反映しつつ、依存関係はコンテナ側に保持する
       - discord-bot-node-modules:/app/node_modules
