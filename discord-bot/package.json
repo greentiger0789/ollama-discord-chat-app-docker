@@ -20,7 +20,7 @@
         "discord-api-types": "^0.38.49",
         "discord.js": "^14.26.4",
         "dotenv": "^17.4.2",
-        "js-yaml": "^4.2.0",
+        "js-yaml": "^5.0.0",
         "node-fetch": "^3.3.2"
     }
 }
