@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test, { describe } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import yaml from 'js-yaml';
+import * as yaml from 'js-yaml';
 
 import { decisionPrompt as legacyDecisionPrompt } from '../src/decisionPrompt.js';
 import { decisionPrompt, prompts, SYSTEM_PROMPT } from '../src/prompts.js';

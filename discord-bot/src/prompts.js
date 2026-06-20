@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import yaml from 'js-yaml';
+import * as yaml from 'js-yaml';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PROMPT_CONFIG_CANDIDATES = [

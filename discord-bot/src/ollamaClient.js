@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tavily } from '@tavily/core';
-import yaml from 'js-yaml';
+import * as yaml from 'js-yaml';
 import fetch from 'node-fetch';
 import { createLogger } from './logger.js';
 import { decisionPrompt, SYSTEM_PROMPT } from './prompts.js';
