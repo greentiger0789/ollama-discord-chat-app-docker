@@ -12,12 +12,12 @@
         "format": "biome format --write ."
     },
     "devDependencies": {
-        "@biomejs/biome": "2.4.16"
+        "@biomejs/biome": "2.5.0"
     },
     "dependencies": {
         "@discordjs/rest": "^2.6.1",
-        "@tavily/core": "^0.7.5",
-        "discord-api-types": "^0.38.48",
+        "@tavily/core": "^0.7.6",
+        "discord-api-types": "^0.38.49",
         "discord.js": "^14.26.4",
         "dotenv": "^17.4.2",
         "js-yaml": "^4.2.0",
