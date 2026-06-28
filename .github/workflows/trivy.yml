@@ -32,7 +32,7 @@ jobs:
         run: docker build -t discord-bot:scan ./discord-bot
 
       - name: Run Trivy vulnerability scanner (image)
-        uses: aquasecurity/trivy-action@dcda964076a395546e2e5b060221d1c18f0c5b0 # v0.33.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: discord-bot:scan
           format: sarif
@@ -50,7 +50,7 @@ jobs:
       # This is intentional — transitive dependency warnings are informational
       # and should not block merges. The image scan above is the blocking gate.
       - name: Run Trivy vulnerability scanner (filesystem)
-        uses: aquasecurity/trivy-action@dcda964076a395546e2e5b060221d1c18f0c5b0 # v0.33.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
           scan-ref: .
