@@ -32,6 +32,7 @@ jobs:
         uses: github/codeql-action/init@1b1aada464948af03b950897e5eb522f92603cc2 # v3.27.9
         with:
           languages: javascript-typescript
+          config-file: default
 
       - name: Autobuild
         uses: github/codeql-action/autobuild@1b1aada464948af03b950897e5eb522f92603cc2 # v3.27.9
