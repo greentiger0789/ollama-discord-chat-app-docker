@@ -1,0 +1,67 @@
+name: Trivy
+
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+    types:
+      - opened
+      - synchronize
+      - reopened
+  push:
+    branches:
+      - main
+      - master
+  schedule:
+    - cron: '0 7 * * 1'
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  scan:
+    name: Vulnerability Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Build discord-bot image
+        run: docker build -t discord-bot:scan ./discord-bot
+
+      - name: Run Trivy vulnerability scanner (image)
+        uses: aquasecurity/trivy-action@dcda964076a395546e2e5b060221d1c18f0c5b0 # v0.33.0
+        with:
+          image-ref: discord-bot:scan
+          format: sarif
+          output: trivy-image-results.sarif
+          severity: CRITICAL,HIGH
+          exit-code: 1
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@1b1aada464948af03b950897e5eb522f92603cc2 # v3.27.9
+        if: always()
+        with:
+          sarif_file: trivy-image-results.sarif
+
+      # Filesystem scan: report vulnerabilities but don't fail the workflow.
+      # This is intentional — transitive dependency warnings are informational
+      # and should not block merges. The image scan above is the blocking gate.
+      - name: Run Trivy vulnerability scanner (filesystem)
+        uses: aquasecurity/trivy-action@dcda964076a395546e2e5b060221d1c18f0c5b0 # v0.33.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-fs-results.sarif
+          severity: CRITICAL,HIGH
+          exit-code: 1
+        continue-on-error: true
+
+      - name: Upload Trivy filesystem scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@1b1aada464948af03b950897e5eb522f92603cc2 # v3.27.9
+        if: always()
+        with:
+          sarif_file: trivy-fs-results.sarif

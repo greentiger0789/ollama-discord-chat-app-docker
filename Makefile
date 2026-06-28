@@ -2,7 +2,7 @@
 # Usage: make [target]
 # Run `make help` for available commands
 
-.PHONY: help lint lint-js lint-actions lint-docker lint-docker-root lint-docker-bot test test-quick build up down down-v clean dev shell install
+.PHONY: help lint lint-js lint-actions lint-docker lint-docker-root lint-docker-bot lint-security scan-secrets scan-vulns scan-code test test-quick build up down down-v clean dev shell install
 
 # Default target
 .DEFAULT_GOAL := help
@@ -12,8 +12,12 @@
 ## ============================================================================
 
 # Tool versions (update these when new versions are released)
+# Note: These versions are for local execution via `make`.
+# GitHub Actions workflows pin their own versions in .github/workflows/.
 ACTIONLINT_VERSION := 1.7.12
 HADOLINT_VERSION := 2.14.0
+GITLEAKS_VERSION := 8.24.0
+TRIVY_VERSION := 0.63.0
 
 PROJECT_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 DOCKER_COMPOSE ?= docker compose --project-directory $(PROJECT_DIR) -f $(PROJECT_DIR)/docker-compose.yml
@@ -69,6 +73,35 @@ lint-docker-bot:
 	@echo "🔍 Linting discord-bot Dockerfile..."
 	$(call require_host)
 	docker run --rm -v "$(PROJECT_DIR):/repo" -w /repo hadolint/hadolint:v$(HADOLINT_VERSION) hadolint /repo/discord-bot/Dockerfile
+
+## ============================================================================
+## SECURITY SCAN TARGETS
+## ============================================================================
+
+lint-security: scan-secrets scan-vulns scan-code
+
+# Secret detection with Gitleaks
+# Note: Pulls Gitleaks container on first run (~50MB). Run `make scan-secrets` to check for leaked secrets.
+scan-secrets:
+	@echo "🔐 Running secret scan (Gitleaks)..."
+	$(call require_host)
+	docker run --rm -v "$(PROJECT_DIR):/repo" -w /repo ghcr.io/gitleaks/gitleaks:v$(GITLEAKS_VERSION) detect --source . --config /repo/.gitleaks.toml --verbose
+
+# Vulnerability scan with Trivy (Dockerfile + filesystem)
+# Note: Pulls Trivy container on first run (~150MB). Run `make scan-vulns` to scan for OS/package vulnerabilities.
+scan-vulns:
+	@echo "🛡️ Running vulnerability scan (Trivy)..."
+	$(call require_host)
+	docker run --rm -v "$(PROJECT_DIR):/repo" -w /repo aquasec/trivy:v$(TRIVY_VERSION) fs --severity HIGH,CRITICAL --exit-code 1 /repo
+	docker run --rm -v "$(PROJECT_DIR):/repo" -w /repo aquasec/trivy:v$(TRIVY_VERSION) config --severity HIGH,CRITICAL --exit-code 1 /repo/Dockerfile /repo/discord-bot/Dockerfile
+
+# Dependency vulnerability scan (npm audit)
+# Scope: known vulnerabilities in npm dependencies only.
+# For static code analysis, see CodeQL in GitHub Actions (codeql.yml).
+scan-code:
+	@echo "🔍 Running dependency vulnerability scan (npm audit)..."
+	$(call require_host)
+	$(BOT_RUN) npm audit --audit-level=high
 
 ## ============================================================================
 ## TEST TARGETS
@@ -162,6 +195,12 @@ help:
 	@echo "  make lint-js       - Run JavaScript/TypeScript lint (Biome)"
 	@echo "  make lint-actions  - Run GitHub Actions workflow lint"
 	@echo "  make lint-docker   - Run Dockerfile lint (hadolint)"
+	@echo "  make lint-security - Run all security scans"
+	@echo ""
+	@echo "Security Scan Commands:"
+	@echo "  make scan-secrets - Run secret detection (Gitleaks)"
+	@echo "  make scan-vulns   - Run vulnerability scan (Trivy)"
+	@echo "  make scan-code    - Run code vulnerability scan (npm audit)"
 	@echo ""
 	@echo "Test Commands:"
 	@echo "  make test          - Run tests (fresh container)"
