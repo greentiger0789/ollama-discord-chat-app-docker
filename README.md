@@ -102,55 +102,35 @@ docker compose up -d
 ```
 .
 ├── README.md                    # このファイル
+├── SECURITY.md                  # セキュリティポリシー
 ├── Makefile                     # 開発・lint・テスト用コマンド
 ├── docker-compose.yml           # Docker Compose 設定
 ├── Dockerfile                   # Ollama サーバー用 Dockerfile
 ├── ollama-entrypoint.sh        # Ollama 起動スクリプト
-├── .env                         # 環境変数（Git では無視）
 ├── .env.example                 # 環境変数のテンプレート
 ├── .gitignore                   # Git 無視設定
+├── .gitleaks.toml               # Gitleaks シークレットスキャン設定
+├── .hadolint.yaml               # Hadolint Dockerfile Lint 設定
 ├── .github/
+│   ├── dependabot.yml           # Dependabot 自動更新設定
+│   ├── pull_request_template.md # PR テンプレート
 │   └── workflows/
-│       └── ci.yml               # CI/CD パイプライン設定
-├── discord-bot/                 # Discord Bot ディレクトリ
-│   ├── index.js                 # メインスクリプト
-│   ├── package.json             # Node.js 依存関係
-│   ├── package-lock.json        # npm lock file
-│   ├── .dockerignore            # Docker ignore 設定
-│   ├── Dockerfile               # Bot 用 Dockerfile
-│   ├── config/
-│   │   └── models.yml           # モデル設定ファイル
-│   ├── logs/                    # ログ出力ディレクトリ
-│   ├── src/
-│   │   ├── discordClient.js     # Discord クライアント初期化
-│   │   ├── ollamaClient.js      # Ollama クライアント
-│   │   ├── systemPrompt.js      # システムプロンプト
-│   │   ├── decisionPrompt.js    # 検索判定プロンプト
-│   │   ├── messageUtils.js      # メッセージユーティリティ
-│   │   ├── threadManager.js     # スレッド履歴管理
-│   │   ├── commands/
-│   │   │   └── oCommand.js      # /o コマンドハンドラ
-│   │   └── handlers/
-│   │       └── threadMessageHandler.js  # スレッドメッセージハンドラ
-│   └── test/
-│       ├── decisionPrompt.test.js
-│       ├── discordClient.test.js
-│       ├── messageUtils.test.js
-│       ├── oCommand.test.js
-│       ├── ollamaClient.comprehensive.test.js
-│       ├── ollamaClient.test.js
-│       ├── systemPrompt.test.js
-│       ├── threadManager.test.js
-│       └── threadMessageHandler.test.js
-└── ollama-data/                 # Ollama データ永続化用
-    ├── config.json
-    ├── history
-    ├── id_ed25519
-    ├── id_ed25519.pub
-    ├── server.json
-    └── models/
-        ├── blobs/
-        └── manifests/
+│       ├── ci.yml               # CI/CD パイプライン設定
+│       ├── gitleaks.yml         # シークレットスキャン workflow
+│       └── trivy.yml            # 脆弱性スキャン workflow
+└── discord-bot/                 # Discord Bot ディレクトリ
+    ├── index.js                 # メインスクリプト
+    ├── package.json             # Node.js 依存関係
+    ├── package-lock.json        # npm lock file
+    ├── biome.json               # Biome Lint/Format 設定
+    ├── dev-runner.js            # 開発用ホットリロードランナー
+    ├── .dockerignore            # Docker ignore 設定
+    ├── Dockerfile               # Bot 用 Dockerfile
+    ├── config/
+    │   ├── models.yml           # モデル設定ファイル
+    │   └── prompts.yml          # プロンプト設定ファイル
+    ├── src/                    # ソースコード（client, commands, handlers等）
+    └── test/                   # テストコード
 ```
 
 ---
@@ -346,29 +326,33 @@ docker run --rm -v "$PWD:/repo" -w /repo hadolint/hadolint:v2.14.0 hadolint /rep
 docker run --rm -v "$PWD:/repo" -w /repo hadolint/hadolint:v2.14.0 hadolint /repo/discord-bot/Dockerfile
 ```
 
-テストカバレッジ：
-- `decisionPrompt.test.js` - 検索判定プロンプト
-- `discordClient.test.js` - Discord クライアント
-- `messageUtils.test.js` - メッセージユーティリティ
-- `oCommand.test.js` - /o コマンドハンドラ
-- `ollamaClient.test.js` - Ollama クライアント基本
-- `ollamaClient.comprehensive.test.js` - Ollama クライアント包括テスト
-- `systemPrompt.test.js` - システムプロンプト
-- `threadManager.test.js` - スレッド管理
-- `threadMessageHandler.test.js` - スレッドメッセージハンドラ
-
 ---
 
 ## CI/CD
 
-`.github/workflows/ci.yml` で CI/CD パイプラインが設定されています。
+`.github/workflows/` に以下の workflow が設定されています。
 
-- **トリガー**: `main` および `master` ブランチへの push / pull_request
-- **JavaScript Lint**: `discord-bot` で `Biome` を実行
-- **Workflow Lint**: `make lint-actions` で GitHub Actions workflow を検証
-- **Dockerfile Lint**: `make lint-docker` で両方の Dockerfile を検証
-- **テスト実行**: `npm test`
-- **Docker Build Check**: `discord-bot` イメージのビルド確認
+### `ci.yml` — CI パイプライン
+
+- **トリガー**: `main` / `master` ブランチへの push および PR（`opened`, `synchronize`, `reopened`）、手動実行（`workflow_dispatch`）
+- **ジョブ**:
+  - **Test**: Node.js 26 で `npm ci` → `npm run lint` → `npm test`
+  - **GitHub Actions Lint**: `make lint-actions` で workflow を検証
+  - **Dockerfile Lint**: `make lint-docker` で両方の Dockerfile を検証
+  - **Docker Build Check**: `discord-bot` イメージのビルド確認（`docker/build-push-action` 使用、GHA キャッシュ対応）
+
+### `gitleaks.yml` — シークレットスキャン
+
+- **トリガー**: `main` / `master` ブランチへの push および PR、手動実行
+- **内容**: `gitleaks/gitleaks-action` を使用し、PR に検知結果をコメントで通知
+
+### `trivy.yml` — 脆弱性スキャン
+
+- **トリガー**: `main` / `master` ブランチへの push および PR、毎週月曜 07:00 の定期実行
+- **内容**:
+  - **イメージスキャン**: `discord-bot` イメージの CRITICAL / HIGH 脆弱性を SARIF 形式で出力
+  - **ファイルシステムスキャン**: リポジトリ全体の CRITICAL / HIGH 脆弱性を SARIF 形式で出力
+  - 結果は GitHub Security タブにアップロード（CI は `continue-on-error` で失敗しない）
 
 ---
 
@@ -383,9 +367,14 @@ docker run --rm -v "$PWD:/repo" -w /repo hadolint/hadolint:v2.14.0 hadolint /rep
 - **`src/decisionPrompt.js`**: Web検索が必要かどうかを判定するプロンプト
 - **`src/messageUtils.js`**: メッセージ分割送信と「思考中」メッセージ生成
 - **`src/threadManager.js`**: スレッドごとの会話履歴管理
+- **`src/env.js`**: 環境変数ヘルパー
+- **`src/loadEnv.js`**: 環境変数読み込み
+- **`src/logger.js`**: ロガー
+- **`src/prompts.js`**: プロンプト管理
 - **`src/commands/oCommand.js`**: `/o` スラッシュコマンドのハンドラ
 - **`src/handlers/threadMessageHandler.js`**: スレッド内のフォローアップメッセージ処理
 - **`config/models.yml`**: モデルごとのパラメータ設定ファイル
+- **`config/prompts.yml`**: プロンプト設定ファイル
 
 ### Ollama サーバー
 
