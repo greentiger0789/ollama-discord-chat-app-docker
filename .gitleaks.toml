@@ -1,0 +1,10 @@
+title = "Gitleaks configuration"
+
+[allowlist]
+  description = "Global allowlist"
+  paths = [
+    '''\.gitleaks\.toml''',
+    '''(.*?)(jpg|gif|doc|pdf|bin|svg|socket)$''',
+    '''node_modules''',
+    '''\.ollama/''',
+  ]
