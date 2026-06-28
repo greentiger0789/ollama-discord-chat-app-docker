@@ -102,55 +102,35 @@ docker compose up -d
 ```
 .
 ├── README.md                    # このファイル
+├── SECURITY.md                  # セキュリティポリシー
 ├── Makefile                     # 開発・lint・テスト用コマンド
 ├── docker-compose.yml           # Docker Compose 設定
 ├── Dockerfile                   # Ollama サーバー用 Dockerfile
 ├── ollama-entrypoint.sh        # Ollama 起動スクリプト
-├── .env                         # 環境変数（Git では無視）
 ├── .env.example                 # 環境変数のテンプレート
 ├── .gitignore                   # Git 無視設定
+├── .gitleaks.toml               # Gitleaks シークレットスキャン設定
+├── .hadolint.yaml               # Hadolint Dockerfile Lint 設定
 ├── .github/
+│   ├── dependabot.yml           # Dependabot 自動更新設定
+│   ├── pull_request_template.md # PR テンプレート
 │   └── workflows/
-│       └── ci.yml               # CI/CD パイプライン設定
-├── discord-bot/                 # Discord Bot ディレクトリ
-│   ├── index.js                 # メインスクリプト
-│   ├── package.json             # Node.js 依存関係
-│   ├── package-lock.json        # npm lock file
-│   ├── .dockerignore            # Docker ignore 設定
-│   ├── Dockerfile               # Bot 用 Dockerfile
-│   ├── config/
-│   │   └── models.yml           # モデル設定ファイル
-│   ├── logs/                    # ログ出力ディレクトリ
-│   ├── src/
-│   │   ├── discordClient.js     # Discord クライアント初期化
-│   │   ├── ollamaClient.js      # Ollama クライアント
-│   │   ├── systemPrompt.js      # システムプロンプト
-│   │   ├── decisionPrompt.js    # 検索判定プロンプト
-│   │   ├── messageUtils.js      # メッセージユーティリティ
-│   │   ├── threadManager.js     # スレッド履歴管理
-│   │   ├── commands/
-│   │   │   └── oCommand.js      # /o コマンドハンドラ
-│   │   └── handlers/
-│   │       └── threadMessageHandler.js  # スレッドメッセージハンドラ
-│   └── test/
-│       ├── decisionPrompt.test.js
-│       ├── discordClient.test.js
-│       ├── messageUtils.test.js
-│       ├── oCommand.test.js
-│       ├── ollamaClient.comprehensive.test.js
-│       ├── ollamaClient.test.js
-│       ├── systemPrompt.test.js
-│       ├── threadManager.test.js
-│       └── threadMessageHandler.test.js
-└── ollama-data/                 # Ollama データ永続化用
-    ├── config.json
-    ├── history
-    ├── id_ed25519
-    ├── id_ed25519.pub
-    ├── server.json
-    └── models/
-        ├── blobs/
-        └── manifests/
+│       ├── ci.yml               # CI/CD パイプライン設定
+│       ├── gitleaks.yml         # シークレットスキャン workflow
+│       └── trivy.yml            # 脆弱性スキャン workflow
+└── discord-bot/                 # Discord Bot ディレクトリ
+    ├── index.js                 # メインスクリプト
+    ├── package.json             # Node.js 依存関係
+    ├── package-lock.json        # npm lock file
+    ├── biome.json               # Biome Lint/Format 設定
+    ├── dev-runner.js            # 開発用ホットリロードランナー
+    ├── .dockerignore            # Docker ignore 設定
+    ├── Dockerfile               # Bot 用 Dockerfile
+    ├── config/
+    │   ├── models.yml           # モデル設定ファイル
+    │   └── prompts.yml          # プロンプト設定ファイル
+    ├── src/                    # ソースコード（client, commands, handlers等）
+    └── test/                   # テストコード
 ```
 
 ---
