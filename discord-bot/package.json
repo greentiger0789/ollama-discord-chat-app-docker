@@ -12,7 +12,7 @@
         "format": "biome format --write ."
     },
     "devDependencies": {
-        "@biomejs/biome": "2.5.1"
+        "@biomejs/biome": "2.5.2"
     },
     "dependencies": {
         "@discordjs/rest": "^2.6.1",
@@ -20,7 +20,7 @@
         "discord-api-types": "^0.38.49",
         "discord.js": "^14.26.4",
         "dotenv": "^17.4.2",
-        "js-yaml": "^5.2.0",
+        "js-yaml": "^5.2.1",
         "node-fetch": "^3.3.2"
     }
 }
