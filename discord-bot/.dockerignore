@@ -1,4 +1,25 @@
+# 依存関係（node_modules は npm ci でコンテナ内にインストールするため除外）
 node_modules
+
+# シークレット・環境変数（絶対にイメージへ含めない）
 .env
-npm-debug.log
+.env.*
+!.env.example
+
+# ログ・一時ファイル
+npm-debug.log*
+*.log
+
+# VCS / CI 設定
+.git
+.gitignore
+.github
+
+# Docker 関連ファイル（ビルドコンテキストに不要）
 Dockerfile
+.dockerignore
+
+# エディタ・AI ツール設定
+**/.vscode
+**/.idea
+.codex

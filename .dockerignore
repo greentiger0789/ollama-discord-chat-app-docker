@@ -1,0 +1,26 @@
+# ビルドコンテキストには ollama イメージのビルドに不要なファイルしか無いため、
+# シークレット・大容量データ・VCS メタデータを中心に除外する
+
+# シークレット・環境変数（絶対にイメージへ含めない）
+.env
+.env.*
+!.env.example
+
+# Ollama の永続データ（モデル blob・SSH 鍵を含む大容量ディレクトリ）
+ollama-data/
+
+# Discord ボット用ディレクトリ（ollama イメージでは不使用。node_modules を含むため除外）
+discord-bot/
+
+# VCS / CI 設定
+.git
+.github
+
+# エディタ・AI ツール設定
+.codex
+**/.vscode
+**/.idea
+
+# ログ・一時ファイル
+**/*.log
+**/tmp
