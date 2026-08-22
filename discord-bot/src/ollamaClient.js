@@ -5,7 +5,7 @@ import { tavily } from '@tavily/core';
 import * as yaml from 'js-yaml';
 import fetch from 'node-fetch';
 import { createLogger } from './logger.js';
-import { decisionPrompt, SYSTEM_PROMPT } from './prompts.js';
+import { decisionPrompt, pickSearchNotice, SYSTEM_PROMPT } from './prompts.js';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const MODEL_CONFIG_CANDIDATES = [
@@ -121,6 +121,9 @@ export default function createOllamaClient({
             searchResults = await searchFn(plan);
         }
 
+        // 検索を実行した場合は返信の先頭に検索済みである旨を付与
+        const didSearch = plan.needSearch && !!searchResults;
+
         /* =========================================
            ④ 最終メッセージ構築
         ========================================= */
@@ -153,7 +156,9 @@ export default function createOllamaClient({
                 options: modelOptions
             });
 
-            if (content !== null) return content;
+            if (content !== null) {
+                return didSearch ? prependSearchNotice(content) : content;
+            }
 
             if (hasThinkingOnlyResponse(data)) {
                 logger.warn('Assistant response exhausted in thinking mode', {
@@ -407,6 +412,18 @@ async function executeDuckDuckGoSearch(query, httpClient) {
             message: DDG_SEARCH_FAILED_MESSAGE
         };
     }
+}
+
+/* ===================================================== */
+/* 🔍 検索済み通知の接頭辞付与 */
+/* ===================================================== */
+
+function prependSearchNotice(content) {
+    const notice = pickSearchNotice();
+    if (!notice || content.startsWith(notice)) {
+        return content;
+    }
+    return `${notice}\n\n${content}`;
 }
 
 /* ===================================================== */

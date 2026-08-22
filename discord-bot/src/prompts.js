@@ -24,7 +24,8 @@ function loadPrompts() {
 
     return {
         system: requirePrompt(prompts, 'system', promptConfigPath),
-        decision: requirePrompt(prompts, 'decision', promptConfigPath)
+        decision: requirePrompt(prompts, 'decision', promptConfigPath),
+        searchNotices: requirePromptList(prompts, 'searchNotices', promptConfigPath)
     };
 }
 
@@ -37,8 +38,32 @@ function requirePrompt(prompts, key, promptConfigPath) {
     return prompt.trim();
 }
 
+function requirePromptList(prompts, key, promptConfigPath) {
+    const list = prompts[key];
+    if (!Array.isArray(list) || list.length === 0) {
+        throw new Error(`Prompt "${key}" must be a non-empty array: ${promptConfigPath}`);
+    }
+
+    const trimmed = list.map(item => {
+        if (typeof item !== 'string' || !item.trim()) {
+            throw new Error(
+                `Prompt "${key}" must contain only non-empty strings: ${promptConfigPath}`
+            );
+        }
+        return item.trim();
+    });
+
+    return trimmed;
+}
+
 const prompts = loadPrompts();
 
 export const SYSTEM_PROMPT = prompts.system;
 export const decisionPrompt = prompts.decision;
+export const searchNotices = prompts.searchNotices;
 export { prompts };
+
+// 検索済み通知をランダムに1件選択する
+export function pickSearchNotice(randomFn = Math.random) {
+    return searchNotices[Math.floor(randomFn() * searchNotices.length)];
+}
