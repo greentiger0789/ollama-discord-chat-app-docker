@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { after, before, describe } from 'node:test';
 import createOllamaClient from '../src/ollamaClient.js';
-import { decisionPrompt, SYSTEM_PROMPT } from '../src/prompts.js';
+import { decisionPrompt, SYSTEM_PROMPT, searchNotices } from '../src/prompts.js';
 
 // console出力を抑制（モジュール読み込み前に設定）
 let originalConsoleError;
@@ -264,6 +264,79 @@ describe('generate() search decision', () => {
 
         assert.ok(!searchCalled, 'searchFn should not be called for general questions');
         assert.ok(typeof result === 'string');
+    });
+
+    test('should prepend search notice when search was executed', async () => {
+        const mockSearchFn = async _plan => 'モック検索結果: 今日の天気は晴れです';
+
+        mockPostHandler = async (_url, data) => {
+            // 検索判定リクエスト
+            if (data.messages && data.messages.length === 2) {
+                return {
+                    data: {
+                        message: {
+                            content: JSON.stringify({
+                                needSearch: true,
+                                engine: 'tavily',
+                                searchQuery: '今日の天気'
+                            })
+                        }
+                    }
+                };
+            }
+            // 検索結果を含む最終リクエスト
+            return {
+                data: {
+                    message: {
+                        content: '今日の天気は晴れです、ご主人様。'
+                    }
+                }
+            };
+        };
+
+        mockGetHandler = async () => ({
+            data: {
+                RelatedTopics: []
+            }
+        });
+
+        const client = buildClient({ searchFn: mockSearchFn });
+
+        const result = await client.generate({
+            prompt: '今日の天気はどう？',
+            history: []
+        });
+
+        assert.ok(
+            searchNotices.some(notice => result.startsWith(notice)),
+            'response should start with one of the search notices'
+        );
+    });
+
+    test('should not prepend search notice without search', async () => {
+        mockPostHandler = async () => ({
+            data: {
+                message: {
+                    content: JSON.stringify({
+                        needSearch: false,
+                        engine: 'tavily',
+                        searchQuery: ''
+                    })
+                }
+            }
+        });
+
+        const client = buildClient();
+
+        const result = await client.generate({
+            prompt: 'こんにちは',
+            history: []
+        });
+
+        assert.ok(
+            !searchNotices.some(notice => result.startsWith(notice)),
+            'response should not start with a search notice'
+        );
     });
 });
 
