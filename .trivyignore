@@ -1,0 +1,15 @@
+# Trivy 除外設定
+# 詳細: https://trivy.dev/latest/docs/configuration/filtering/
+
+# ollama-data/ は Ollama コンテナのデータディレクトリ(bind mount 用ボリューム)。
+# 内部の SSH 鍵は Ollama が自動生成したもので、リポジトリにはコミットされていない
+# (.gitignore で除外済み)。ローカルスキャンで毎回検出されるため除外する。
+# ※ CI (trivy.yml) では ollama-data が存在しないため、この除外はローカル実行時のみ実質有効。
+ollama-data/id_ed25519
+
+# Dockerfile の DS-0002 (root ユーザー実行) は意図的な設計。
+# - root Dockerfile: ollama-data の所有権調整のため一時的に root で実行
+# - discord-bot Dockerfile: node ユーザーへ切り替え済みだが、ベースイメージ側の
+#   最終 USER が root になる構成で検出される
+# 詳細は各 Dockerfile のコメントを参照。
+AVD-DS-0002

@@ -15,9 +15,10 @@
 # Note: These versions are for local execution via `make`.
 # GitHub Actions workflows pin their own versions in .github/workflows/.
 ACTIONLINT_VERSION := 1.7.12
-HADOLINT_VERSION := 2.14.0
-GITLEAKS_VERSION := 8.24.0
-TRIVY_VERSION := 0.63.0
+HADOLINT_VERSION := 2.15.1
+GITLEAKS_VERSION := 8.30.1
+# trivy-action v0.36.0 (.github/workflows/trivy.yml) が内蔵する Trivy バージョンに合わせている
+TRIVY_VERSION := 0.70.0
 
 PROJECT_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 DOCKER_COMPOSE ?= docker compose --project-directory $(PROJECT_DIR) -f $(PROJECT_DIR)/docker-compose.yml
@@ -31,6 +32,9 @@ BOT_RUN := cd $(BOT_WORKDIR) &&
 else
 BOT_RUN := $(DOCKER_COMPOSE) run --build --rm --no-deps $(BOT_SERVICE)
 endif
+
+# 起動済みコンテナ内でコマンドを実行する(make up / make dev 実行後用)
+BOT_EXEC := $(DOCKER_COMPOSE) exec $(BOT_SERVICE)
 
 define require_host
 	@if [ "$(IN_BOT_CONTAINER)" = "1" ]; then \
@@ -92,8 +96,9 @@ scan-secrets:
 scan-vulns:
 	@echo "🛡️ Running vulnerability scan (Trivy)..."
 	$(call require_host)
-	docker run --rm -v "$(PROJECT_DIR):/repo" -w /repo aquasec/trivy:v$(TRIVY_VERSION) fs --severity HIGH,CRITICAL --exit-code 1 /repo
-	docker run --rm -v "$(PROJECT_DIR):/repo" -w /repo aquasec/trivy:v$(TRIVY_VERSION) config --severity HIGH,CRITICAL --exit-code 1 /repo/Dockerfile /repo/discord-bot/Dockerfile
+	docker run --rm -v "$(PROJECT_DIR):/repo" -w /repo aquasec/trivy:$(TRIVY_VERSION) fs --severity HIGH,CRITICAL --exit-code 1 --skip-files "ollama-data/**" /repo
+	docker run --rm -v "$(PROJECT_DIR):/repo" -w /repo aquasec/trivy:$(TRIVY_VERSION) config --severity HIGH,CRITICAL --exit-code 1 /repo/Dockerfile
+	docker run --rm -v "$(PROJECT_DIR):/repo" -w /repo aquasec/trivy:$(TRIVY_VERSION) config --severity HIGH,CRITICAL --exit-code 1 /repo/discord-bot/Dockerfile
 
 # Dependency vulnerability scan (npm audit)
 # Scope: known vulnerabilities in npm dependencies only.
@@ -118,7 +123,7 @@ test-quick:
 ifeq ($(IN_BOT_CONTAINER),1)
 	cd $(BOT_WORKDIR) && npm test
 else
-	$(DOCKER_COMPOSE) exec $(BOT_SERVICE) npm test
+	$(BOT_EXEC) npm test
 endif
 
 ## ============================================================================
@@ -173,7 +178,7 @@ shell:
 ifeq ($(IN_BOT_CONTAINER),1)
 	cd $(BOT_WORKDIR) && /bin/sh
 else
-	$(DOCKER_COMPOSE) exec $(BOT_SERVICE) /bin/sh
+	$(BOT_EXEC) /bin/sh
 endif
 
 # Install dependencies (rebuild node_modules)
