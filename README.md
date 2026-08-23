@@ -1,259 +1,78 @@
+日本語 | [English](README.en.md)
+
 # Discord Ollama Bot
 
-Ollama をバックエンドに使用した Discord ボットです。質問応答、Web検索、会話履歴の管理、そして「メイドちゃん」キャラクターによる独創的な応答が可能です。
-
-
----
-
-## 📋 目次
-
-- [特徴](#特徴)
-- [前提条件](#前提条件)
-- [クイックスタート](#クイックスタート)
-- [ディレクトリ構成](#ディレクトリ構成)
-- [環境変数](#環境変数)
-- [設定](#設定)
-- [実行方法](#実行方法)
-  - [Docker Compose で実行](#docker-compose-で実行)
-  - [直接 Node.js で実行](#直接-nodejs-で実行)
-- [スラッシュコマンド](#スラッシュコマンド)
-- [機能詳細](#機能詳細)
-  - [会話履歴管理](#会話履歴管理)
-  - [Web検索機能](#web検索機能)
-  - [応答生成戦略](#応答生成戦略)
-  - [モデル設定](#モデル設定)
-- [テスト](#テスト)
-- [CI/CD](#cicd)
-- [プロジェクト構成](#プロジェクト構成)
-- [Ollama サーバー設定](#ollama-サーバー設定)
-- [トラブルシューティング](#トラブルシューティング)
-- [参考リンク](#参考リンク)
-- [バージョン履歴](#バージョン履歴)
-
----
+Ollama をバックエンドに使用した Discord ボットです。「メイドちゃん」キャラクターによる質問応答、Web 検索、スレッド単位の会話履歴管理が可能です。
 
 ## 特徴
 
-- 🔹 **Ollama 連携**: `ollama/ollama` との連携で、独自のLLMモデルを活用
-- 🔹 **Discord Slash Command**: `/o` コマンドで簡単質問応答
-- 🔹 **会話履歴管理**: スレッド単位での会話履歴を自動管理・要約
-- 🔹 **Web検索統合**: Tavily / DuckDuckGo を使ったリアルタイム検索
-- 🔹 **キャラクター設定**: 「メイドちゃん」としての独創的応答
-- 🔹 **応答分割送信**: 長文応答を自動的に分割して送信
-- 🔹 **モデル設定ファイル**: YAML形式でモデルごとのパラメータを設定可能
-- 🔹 **GPU対応**: NVIDIA GPU を活用した高速推論
-- 🔹 **Open WebUI**: オプションでWeb UIを利用可能
-- 🔹 **コンテナ化**: Docker Compose で簡単デプロイ
-
----
+- **Ollama 連携**: ローカル LLM（NVIDIA GPU 対応）およびクラウドモデルを活用
+- **Slash Command**: `/o` コマンドで質問するとスレッドを作成して応答
+- **会話履歴管理**: スレッド単位で履歴を保持し、長くなると自動要約
+- **Web 検索**: Tavily（失敗時 DuckDuckGo にフォールバック）でリアルタイム検索
+- **ホットリロード開発**: ソース・設定・`.env` の変更を自動検出して再起動
+- **Open WebUI**: オプションで Web UI を追加可能
 
 ## 前提条件
 
-以下がインストールされていることを確認してください：
+- Docker / Docker Compose v2 以上
+- NVIDIA GPU（コンテナ側で自動設定。GPU 無し環境は `docker-compose.yml` の `deploy.resources` 調整が必要）
+- Discord Bot Token（[Discord Developer Portal](https://discord.com/developers/applications) で作成）
+- Web 検索を使う場合: [Tavily](https://tavily.com/) の API Key
 
-- **Docker** （推奨: 最新版）
-- **Docker Compose** （v2 以上推奨）
-- **Node.js** （v26以上、直接実行する場合）
-- **Discord Bot Token** ([Discord Developer Portal](https://discord.com/developers/applications)で作成)
-- **Ollama サーバー** (`http://localhost:11434` または別ホスト)
-- **Tavily API Key** （Web検索機能を使用する場合、[Tavily API](https://tavily.com/)で取得）
-
----
+ランタイム: Node.js v26 以上（直接実行する場合のみ）
 
 ## クイックスタート
 
 ### 1. 環境変数の設定
 
-`.env` ファイルをプロジェクトルートに作成し、以下の内容を記述します：
-
-```env
-# Discord
-DISCORD_TOKEN=your_discord_bot_token
-DISCORD_GUILD_ID=your_server_id (オプション)
-
-# Ollama
-OLLAMA_BASE_URL=http://ollama:11434
-OLLAMA_MODEL=qwen3.5:9b
-
-# Tavily (オプション)
-TAVILY_API_KEY=your_tavily_api_key
-
-# Logging (オプション)
-LOG_LEVEL=info # debug / info / warn / error / silent
+```bash
+cp .env.example .env
 ```
 
-> **参考**: `.env.example` ファイルの内容を参考にしてください。
+`.env` を編集して `DISCORD_TOKEN` などを設定します。
 
-### 2. コンテナを起動
+### 2. 起動
 
 ```bash
-docker compose up -d
+make up
 ```
 
-### 3. Bot を Discord で確認
+### 3. 動作確認
 
-- Discord を開き、`/o` コマンドを実行
-- メッセージを入力すると、Bot が応答します
-
----
-
-## ディレクトリ構成
-
-```
-.
-├── README.md                    # このファイル
-├── SECURITY.md                  # セキュリティポリシー
-├── Makefile                     # 開発・lint・テスト用コマンド
-├── docker-compose.yml           # Docker Compose 設定
-├── Dockerfile                   # Ollama サーバー用 Dockerfile
-├── ollama-entrypoint.sh        # Ollama 起動スクリプト
-├── .env.example                 # 環境変数のテンプレート
-├── .gitignore                   # Git 無視設定
-├── .gitleaks.toml               # Gitleaks シークレットスキャン設定
-├── .hadolint.yaml               # Hadolint Dockerfile Lint 設定
-├── .github/
-│   ├── dependabot.yml           # Dependabot 自動更新設定
-│   ├── pull_request_template.md # PR テンプレート
-│   └── workflows/
-│       ├── ci.yml               # CI/CD パイプライン設定
-│       ├── gitleaks.yml         # シークレットスキャン workflow
-│       └── trivy.yml            # 脆弱性スキャン workflow
-└── discord-bot/                 # Discord Bot ディレクトリ
-    ├── index.js                 # メインスクリプト
-    ├── package.json             # Node.js 依存関係
-    ├── package-lock.json        # npm lock file
-    ├── biome.json               # Biome Lint/Format 設定
-    ├── dev-runner.js            # 開発用ホットリロードランナー
-    ├── .dockerignore            # Docker ignore 設定
-    ├── Dockerfile               # Bot 用 Dockerfile
-    ├── config/
-    │   ├── models.yml           # モデル設定ファイル
-    │   └── prompts.yml          # プロンプト設定ファイル
-    ├── src/                    # ソースコード（client, commands, handlers等）
-    └── test/                   # テストコード
-```
-
----
+Discord で `/o` コマンドを実行し、Bot がスレッドを作成して応答すれば成功です。
 
 ## 環境変数
 
 | 変数名 | 必須 | 説明 |
 |--------|------|------|
 | `DISCORD_TOKEN` | ✅ | Discord Bot のトークン |
-| `DISCORD_GUILD_ID` | ❌ | コマンドを登録するサーバーID（指定しない場合はグローバルコマンド） |
-| `OLLAMA_HOST` | ❌ | Ollama サーバーのホスト (デフォルト: `http://0.0.0.0:11434`) |
-| `OLLAMA_BASE_URL` | ❌ | Botから見たOllamaサーバーのURL (デフォルト: `http://ollama:11434`) |
-| `OLLAMA_MODEL` | ❌ | 使用するモデル名 (デフォルト: `qwen3.5:9b`) |
-| `OLLAMA_AUTO_LOAD` | ❌ | 起動時にモデルを自動ロードするか (デフォルト: `false`) |
-| `OLLAMA_API_KEY` | ❌ | Ollama API キー（クラウドモデル用） |
-| `TAVILY_API_KEY` | ❌ | Web検索機能に使用するAPIキー |
-| `COMPOSE_PROFILES` | ❌ | Docker Compose プロファイル (例: `webui`) |
+| `DISCORD_GUILD_ID` | ❌ | コマンドを登録するサーバー ID（未指定時はグローバルコマンド） |
+| `OLLAMA_HOST` | ❌ | Ollama サーバー自身の待ち受け URL（デフォルト: `http://0.0.0.0:11434`） |
+| `OLLAMA_BASE_URL` | ❌ | Bot から見た Ollama サーバーの URL（デフォルト: `http://ollama:11434`） |
+| `OLLAMA_MODEL` | ❌ | 使用するモデル名（デフォルト: `qwen3.5:9b`） |
+| `OLLAMA_AUTO_LOAD` | ❌ | `true` で起動時にモデルを自動プル・ウォームアップ（クラウドモデルはウォームアップをスキップ） |
+| `TAVILY_API_KEY` | ❌ | Web 検索用 API Key |
+| `LOG_LEVEL` | ❌ | `debug` / `info` / `warn` / `error` / `silent`（デフォルト: `info`） |
+| `COMPOSE_PROFILES` | ❌ | `webui` で Open WebUI を有効化 |
 
----
-
-## 設定
-
-### Discord Bot の設定
-
-1. [Discord Developer Portal](https://discord.com/developers/applications) にアクセス
-2. 新しいアプリケーションを作成
-3. Bot を追加し、トークンをコピー
-4. Bot の権限設定で以下の権限を付与：
-   - `Send Messages`
-   - `Read Message History`
-   - `Embed Links`
-   - `Manage Threads`
-5. サーバーに Bot を招待
-
-### Ollama サーバーの設定
-
-`docker-compose.yml` で Ollama を起動する設定が含まれています。以下のモデルを自動でロードする設定となっています：
-
-- `qwen3.5:9b` （デフォルト）
-
----
-
-## 実行方法
-
-### Docker Compose で実行
-
-```bash
-# Makefile を使用（推奨）
-make up            # コンテナ起動（バックグラウンド）
-make dev           # 開発モード（ログ付き）
-make down          # コンテナ停止
-
-# または直接実行
-# 環境変数ファイルを作成
-cp .env.example .env
-# .env を編集して環境変数を設定
-
-# 起動
-docker compose up -d
-```
-
-`discord-bot` はホットリロード対応です。`index.js`、`src/`、`config/`、`.env` を更新すると自動で再起動され、`package.json` や `package-lock.json` を更新した場合もコンテナ内で `npm ci` を実行してから再起動されます。
-
-### 直接 Node.js で実行
-
-```bash
-# 依存関係のインストール
-cd discord-bot
-npm ci
-
-# Lint
-npm run lint
-
-# Lint の自動修正と整形
-npm run lint:fix
-
-# ホットリロード付きで実行
-npm run dev
-
-# 通常実行
-npm start
-```
-
----
-
-## スラッシュコマンド
+## 使い方
 
 ### `/o` コマンド
 
-- **説明**: Ollama にプロンプトを送信
-- **引数**:
-  - `prompt` (必須): 送信するプロンプト
-- **応答**:
-  - スレッドを作成し、応答を返信
-  - 長文の場合は自動的に分割して送信
+- `prompt`（必須）にプロンプトを送信すると、スレッドを作成して応答
+- スレッド内のメッセージにも文脈を引き継いで返信
+- 長文応答は 1900 文字単位で自動分割送信
 
----
+### Open WebUI
 
-## 機能詳細
+`.env` に `COMPOSE_PROFILES=webui` を設定して `make up` すると、`http://localhost:3000` で Web UI が利用できます。
 
-### 会話履歴管理
+## 設定ファイル
 
-- スレッドごとに会話履歴を保持
-- 履歴が長くなると自動で要約
-- 最大コンテキスト長を考慮した履歴管理
+### `discord-bot/config/models.yml`
 
-### Web検索機能
-
-- 質問内容に応じて、Tavily または DuckDuckGo を使用
-- 検索が必要なキーワード（例: 「最新」「今日」「価格」など）を自動判定
-- 検索結果を元に回答を生成
-
-### 応答生成戦略
-
-1. **トークン概算**: 入力テキストの長さから概算トークン数を計算（日本語LLM向け）
-2. **履歴要約**: 履歴が長すぎると、要約してコンテキストを節約（最大12000トークン）
-3. **検索判定**: Web検索が必要かどうかを判定（強制キーワード含む）
-4. **応答生成**: 検索結果を含めた状態でLLMにプロンプトを送信
-5. **応答分割**: 長文の場合は Discord の上限 (1900文字) に合わせて分割
-
-### モデル設定
-
-`discord-bot/config/models.yml` でモデルごとのパラメータを設定できます：
+モデルごとのパラメータ（`num_ctx`, `num_predict`, `temperature`, `mirostat`, `repeat_penalty` など）を定義します。ボットはここからモデル設定を読み込みます。
 
 ```yaml
 models:
@@ -261,211 +80,132 @@ models:
     num_ctx: 16384
     num_predict: 8192
     temperature: 0.3
-
-  qwen3:14b:
-    num_ctx: 16384
-    num_predict: 8192
-    temperature: 0.3
-
-  qwen3.5:cloud:
-    num_ctx: 131072
-    num_predict: 4096
-    num_keep: 2048
-    temperature: 0.4
-    mirostat: 2
-    mirostat_tau: 5
-    mirostat_eta: 0.1
-    repeat_penalty: 1.1
 ```
 
-設定可能なパラメータ：
-- `num_ctx`: コンテキストウィンドウサイズ
-- `num_predict`: 生成する最大トークン数
-- `temperature`: 生成のランダム性（0-1）
-- `mirostat`: 適応的サンプリング方式
-- `repeat_penalty`: 繰り返しペナルティ
+### `discord-bot/config/prompts.yml`
 
----
+システムプロンプト（メイドちゃんのキャラクター設定）や Web 検索時の通知文言を定義します。
 
-## テスト
+## 開発・テスト・Lint
+
+Makefile を推奨（ホスト側で実行）。ボットコンテナ内では自動的に JS 関連ターゲットのみに切り替わります。
 
 ```bash
-# Makefile を使用（推奨）
-make test          # テスト実行（新規コンテナ）
-make test-quick    # テスト実行（起動済みコンテナ）
+# 起動・停止
+make up            # コンテナ起動（バックグラウンド）
+make dev           # 開発モード（ログ付き）
+make down          # コンテナ停止
+make down-v        # ボリュームも含めて停止
+make shell         # discord-bot コンテナに入る
 
-# または直接実行
-# プロジェクトルートで実行（ホスト側から）
+# テスト
+make test          # 新規コンテナで実行
+make test-quick    # 起動済みコンテナで実行（手早い）
+
+# Lint
+make lint          # 全 lint（JS + Actions + Dockerfile）
+make lint-js       # Biome lint のみ
+make lint-actions  # actionlint のみ
+make lint-docker   # hadolint のみ
+
+# セキュリティスキャン
+make lint-security # 全スキャン実行
+make scan-secrets  # Gitleaks
+make scan-vulns    # Trivy
+make scan-code     # npm audit
+```
+
+直接実行する場合:
+
+```bash
 docker compose run --build --rm --no-deps discord-bot npm test
-```
-
-起動済みの `discord-bot` コンテナに対して手早く再実行したい場合は、以下でも実行できます。
-
-```bash
-docker compose exec discord-bot npm test
-```
-
-Lint は以下で実行できます。
-
-```bash
-# Makefile を使用（推奨）
-make lint          # 全てのlintを実行
-make lint-js       # JavaScript lint のみ
-make lint-actions  # GitHub Actions lint のみ
-make lint-docker   # Dockerfile lint のみ
-
-# または個別に実行
-# JavaScript / package.json
+docker compose exec discord-bot npm test   # 起動済みコンテナで手早く
 docker compose run --build --rm --no-deps discord-bot npm run lint
-
-# GitHub Actions workflow
-docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12
-
-# Dockerfile
-docker run --rm -v "$PWD:/repo" -w /repo hadolint/hadolint:v2.14.0 hadolint /repo/Dockerfile
-docker run --rm -v "$PWD:/repo" -w /repo hadolint/hadolint:v2.14.0 hadolint /repo/discord-bot/Dockerfile
 ```
 
----
+ホスト上で直接 Node.js 実行する場合:
+
+```bash
+cd discord-bot
+npm ci
+npm run dev    # ホットリロード付き
+npm start      # 通常実行
+```
+
+## アーキテクチャ
+
+```
+Discord ──> discord-bot ──> ollama (LLM 推論)
+                │
+                └──> Tavily / DuckDuckGo (Web 検索)
+```
+
+応答生成の流れ:
+
+1. **トークン概算**: 入力テキストから概算トークン数を計算（日本語 LLM 向け）
+2. **履歴要約**: 履歴が長すぎる場合は要約してコンテキストを節約（最大 12000 トークン）
+3. **検索判定**: Web 検索が必要かどうかをプロンプトで判定
+4. **応答生成**: 検索結果を含めて LLM に送信
+5. **応答分割**: Discord 上限 (1900 文字) に合わせて分割送信
+
+主要モジュール (`discord-bot/src/`):
+
+| モジュール | 役割 |
+|-----------|------|
+| `index.js` | エントリーポイント。Client 初期化とハンドラ登録 |
+| `ollamaClient.js` | Ollama API 通信・検索判定・履歴要約・モデル設定読み込み |
+| `threadManager.js` | スレッド単位の会話履歴管理 |
+| `messageUtils.js` | メッセージ分割送信・「思考中」メッセージ生成 |
+| `prompts.js` / `systemPrompt.js` / `decisionPrompt.js` | プロンプト管理 |
+| `commands/oCommand.js` | `/o` スラッシュコマンド |
+| `handlers/threadMessageHandler.js` | スレッド内フォローアップ処理 |
+
+## ディレクトリ構成
+
+```
+.
+├── docker-compose.yml           # サービスオーケストレーション
+├── Dockerfile                   # Ollama サーバー用
+├── ollama-entrypoint.sh         # Ollama 起動・モデルプル・ウォームアップ
+├── Makefile                     # 開発・lint・テスト用コマンド
+├── .env.example                 # 環境変数テンプレート
+├── .github/workflows/           # ci.yml / gitleaks.yml / trivy.yml
+└── discord-bot/                 # Discord Bot 本体
+    ├── index.js                 # エントリーポイント
+    ├── dev-runner.js            # 開発用ホットリロードランナー
+    ├── biome.json               # Biome 設定
+    ├── config/
+    │   ├── models.yml           # モデル別パラメータ
+    │   └── prompts.yml          # プロンプト設定
+    ├── src/                     # ソースコード
+    └── test/                    # テスト (node:test)
+```
 
 ## CI/CD
 
-`.github/workflows/` に以下の workflow が設定されています。
+`.github/workflows/` に以下を設定しています。
 
-### `ci.yml` — CI パイプライン
+- **`ci.yml`**: Node.js 26 で `npm ci` → `npm run lint` → `npm test`。加えて actionlint / hadolint / Docker ビルドチェック
+- **`gitleaks.yml`**: シークレットスキャン（検知結果を PR にコメント）
+- **`trivy.yml`**: イメージ・ファイルシステムの脆弱性スキャン（HIGH/CRITICAL、結果は GitHub Security タブへ）
 
-- **トリガー**: `main` / `master` ブランチへの push および PR（`opened`, `synchronize`, `reopened`）、手動実行（`workflow_dispatch`）
-- **ジョブ**:
-  - **Test**: Node.js 26 で `npm ci` → `npm run lint` → `npm test`
-  - **GitHub Actions Lint**: `make lint-actions` で workflow を検証
-  - **Dockerfile Lint**: `make lint-docker` で両方の Dockerfile を検証
-  - **Docker Build Check**: `discord-bot` イメージのビルド確認（`docker/build-push-action` 使用、GHA キャッシュ対応）
-
-### `gitleaks.yml` — シークレットスキャン
-
-- **トリガー**: `main` / `master` ブランチへの push および PR、手動実行
-- **内容**: `gitleaks/gitleaks-action` を使用し、PR に検知結果をコメントで通知
-
-### `trivy.yml` — 脆弱性スキャン
-
-- **トリガー**: `main` / `master` ブランチへの push および PR、毎週月曜 07:00 の定期実行
-- **内容**:
-  - **イメージスキャン**: `discord-bot` イメージの CRITICAL / HIGH 脆弱性を SARIF 形式で出力
-  - **ファイルシステムスキャン**: リポジトリ全体の CRITICAL / HIGH 脆弱性を SARIF 形式で出力
-  - 結果は GitHub Security タブにアップロード（CI は `continue-on-error` で失敗しない）
-
----
-
-## プロジェクト構成
-
-### Discord Bot (`discord-bot/`)
-
-- **`index.js`**: メインスクリプト。Discord Client の初期化とイベントハンドラの登録
-- **`src/discordClient.js`**: Discord Client の設定とスラッシュコマンド登録
-- **`src/ollamaClient.js`**: Ollama との通信を担当。検索判定、履歴要約、モデル設定読み込みを含む
-- **`src/systemPrompt.js`**: メイドちゃんキャラクター設定のシステムプロンプト
-- **`src/decisionPrompt.js`**: Web検索が必要かどうかを判定するプロンプト
-- **`src/messageUtils.js`**: メッセージ分割送信と「思考中」メッセージ生成
-- **`src/threadManager.js`**: スレッドごとの会話履歴管理
-- **`src/env.js`**: 環境変数ヘルパー
-- **`src/loadEnv.js`**: 環境変数読み込み
-- **`src/logger.js`**: ロガー
-- **`src/prompts.js`**: プロンプト管理
-- **`src/commands/oCommand.js`**: `/o` スラッシュコマンドのハンドラ
-- **`src/handlers/threadMessageHandler.js`**: スレッド内のフォローアップメッセージ処理
-- **`config/models.yml`**: モデルごとのパラメータ設定ファイル
-- **`config/prompts.yml`**: プロンプト設定ファイル
-
-### Ollama サーバー
-
-- **`Dockerfile`**: Ollama サーバー用のカスタムDockerfile（curlインストール含む）
-- **`ollama-entrypoint.sh`**: サーバー起動、モデルプル、ウォームアップを行うスクリプト
-
----
-
-## Ollama サーバー設定
-
-`docker-compose.yml` で以下の設定が含まれています：
-
-### サービス構成
-
-- **ollama**: メインのOllamaサーバー（ポート11434）
-  - NVIDIA GPU対応（自動検出）
-  - ヘルスチェック機能
-  - 自動モデルロード機能
-
-- **open-webui**: Web UI（オプション、ポート3000）
-  - `COMPOSE_PROFILES=webui` で有効化
-  - Ollamaサーバーのヘルスチェック後に起動
-
-- **discord-bot**: Discord Bot（discord-botサービス）
-
-### GPU サポート
-
-NVIDIA GPUを使用する場合、`docker-compose.yml` で自動的に設定されます：
-
-```yaml
-deploy:
-  resources:
-    reservations:
-      devices:
-        - driver: nvidia
-          count: all
-          capabilities: [ gpu ]
-```
-
-### 自動モデルロード
-
-`OLLAMA_AUTO_LOAD=true` を設定すると、起動時に指定したモデルを自動的にプル・ウォームアップします。
-クラウドモデル（`:cloud`サフィックス）の場合はウォームアップをスキップします。
-
----
+PR 作成前には `make lint` と `make test` を通しておくこと。
 
 ## トラブルシューティング
 
-### Bot が応答しない
-
-- `DISCORD_TOKEN` が正しいか確認
-- Bot の権限が適切に設定されているか確認
-  - `Send Messages`
-  - `Read Message History`
-  - `Embed Links`
-  - `Manage Threads`
-- Ollama サーバーが起動しているか確認
-
-### Ollama サーバーに接続できない
-
-- `OLLAMA_BASE_URL` が正しいか確認
-- コンテナ間のネットワーク設定を確認
-- ヘルスチェックが通っているか確認: `docker compose logs ollama`
-
-### Web検索が機能しない
-
-- `TAVILY_API_KEY` が正しいか確認
-- API の制限を超えていないか確認
-
-### テストが失敗する
-
-- ホスト側から実行する場合は `docker compose run --build --rm --no-deps discord-bot npm test` を使用
-- 起動済みコンテナで再実行する場合は `docker compose exec discord-bot npm test` を使用
-- コンテナ内で直接実行する場合は Node.js v26以上を使用し、`npm ci` を実行して `package-lock.json` に固定された依存関係をインストール
-
-## ランタイム
-
-- **Node.js**: v26以上
-- **npm**: パッケージマネージャ (`package-lock.json` を Git 管理)
-
----
+| 症状 | 確認ポイント |
+|------|-------------|
+| Bot が応答しない | `DISCORD_TOKEN`、Bot の権限（Send Messages / Read Message History / Embed Links / Manage Threads）、Ollama サーバーの起動状態 |
+| Ollama に接続できない | `OLLAMA_BASE_URL`、コンテナ間ネットワーク、`docker compose logs ollama` のヘルスチェック |
+| Web 検索が機能しない | `TAVILY_API_KEY`、API レート制限 |
 
 ## 参考リンク
 
-- [Discord.js ドキュメント](https://discord.js.org/)
-- [Ollama 公式ドキュメント](https://github.com/ollama/ollama)
+- [discord.js ドキュメント](https://discord.js.org/)
+- [Ollama 公式](https://github.com/ollama/ollama)
 - [Tavily API](https://tavily.com/)
 - [Docker Compose 公式ドキュメント](https://docs.docker.com/compose/)
 
 ---
 
-
-**Contributions welcome!** 🎉
-issues や PR をお気軽に送ってください。
+Contributions welcome! 🎉 issues や PR をお気軽に送ってください。
