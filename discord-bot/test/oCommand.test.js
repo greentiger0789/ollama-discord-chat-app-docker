@@ -155,6 +155,67 @@ describe('oCommand', () => {
         });
     });
 
+    describe('thread naming', () => {
+        test('should pass generated thread name to startThread', async () => {
+            let capturedThreadName = null;
+
+            const mockInteraction = {
+                options: { getString: () => 'これはスレッド名のテストです' },
+                deferReply: async () => {},
+                followUp: async () => ({
+                    startThread: async ({ name }) => {
+                        capturedThreadName = name;
+                        return { id: 'thread-123', send: async () => {} };
+                    }
+                }),
+                user: { username: 'testuser' }
+            };
+
+            const mockHandleOCommand = createHandleOCommand({
+                generateResponse: async () => 'テスト応答',
+                getThreadHistory: () => [],
+                addToThreadHistory: () => {},
+                initializeThread: () => {},
+                buildMaidThinkingMessage: () => '思考中...',
+                sendSplitMessage: async () => {}
+            });
+
+            await mockHandleOCommand(mockInteraction);
+
+            assert.equal(capturedThreadName, 'これはスレッド名のテストです');
+        });
+
+        test('should use custom generateThreadName when injected', async () => {
+            let capturedThreadName = null;
+
+            const mockInteraction = {
+                options: { getString: () => 'プロンプト' },
+                deferReply: async () => {},
+                followUp: async () => ({
+                    startThread: async ({ name }) => {
+                        capturedThreadName = name;
+                        return { id: 'thread-123', send: async () => {} };
+                    }
+                }),
+                user: { username: 'testuser' }
+            };
+
+            const mockHandleOCommand = createHandleOCommand({
+                generateResponse: async () => 'テスト応答',
+                getThreadHistory: () => [],
+                addToThreadHistory: () => {},
+                initializeThread: () => {},
+                buildMaidThinkingMessage: () => '思考中...',
+                sendSplitMessage: async () => {},
+                generateThreadName: (prompt, username) => `custom-${username}-${prompt}`
+            });
+
+            await mockHandleOCommand(mockInteraction);
+
+            assert.equal(capturedThreadName, 'custom-testuser-プロンプト');
+        });
+    });
+
     describe('error handling', () => {
         test('should handle errors gracefully', async () => {
             let errorFollowUpCalled = false;

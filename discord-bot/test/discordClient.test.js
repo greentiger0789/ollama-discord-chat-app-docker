@@ -57,6 +57,73 @@ describe('discordClient exports', () => {
     });
 });
 
+describe('command definitions', () => {
+    test('should register o-reset and o-summary commands', async () => {
+        const { createRegisterCommands } = await importFreshDiscordClient({
+            guildId: '1234567890'
+        });
+        let payload = null;
+
+        const registerCommands = createRegisterCommands({
+            client: {
+                application: {
+                    fetch: async () => ({ id: 'app-1' })
+                }
+            },
+            guildId: '1234567890',
+            restClient: {
+                put: async (_route, body) => {
+                    payload = body;
+                }
+            },
+            routes: {
+                applicationGuildCommands: (appId, guildId) => `guild:${appId}:${guildId}`,
+                applicationCommands: appId => `global:${appId}`
+            }
+        });
+
+        await registerCommands();
+
+        const names = payload?.body?.map(cmd => cmd.name);
+        assert.ok(names.includes('o'), 'o command should be registered');
+        assert.ok(names.includes('o-reset'), 'o-reset command should be registered');
+        assert.ok(names.includes('o-summary'), 'o-summary command should be registered');
+    });
+
+    test('o-reset and o-summary should have descriptions', async () => {
+        const { createRegisterCommands } = await importFreshDiscordClient({
+            guildId: '1234567890'
+        });
+        let payload = null;
+
+        const registerCommands = createRegisterCommands({
+            client: {
+                application: {
+                    fetch: async () => ({ id: 'app-1' })
+                }
+            },
+            guildId: '1234567890',
+            restClient: {
+                put: async (_route, body) => {
+                    payload = body;
+                }
+            },
+            routes: {
+                applicationGuildCommands: (appId, guildId) => `guild:${appId}:${guildId}`,
+                applicationCommands: appId => `global:${appId}`
+            }
+        });
+
+        await registerCommands();
+
+        const resetCmd = payload?.body?.find(cmd => cmd.name === 'o-reset');
+        const summaryCmd = payload?.body?.find(cmd => cmd.name === 'o-summary');
+
+        assert.match(resetCmd?.description || '', /リセット/);
+        assert.match(summaryCmd?.description || '', /要約/);
+    });
+});
+
 describe('createRegisterCommands', () => {
     test('should register guild commands when DISCORD_GUILD_ID is numeric', async () => {
         const { createRegisterCommands } = await importFreshDiscordClient({

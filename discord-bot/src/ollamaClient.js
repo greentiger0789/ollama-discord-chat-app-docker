@@ -5,7 +5,7 @@ import { tavily } from '@tavily/core';
 import * as yaml from 'js-yaml';
 import fetch from 'node-fetch';
 import { createLogger } from './logger.js';
-import { decisionPrompt, pickSearchNotice, SYSTEM_PROMPT } from './prompts.js';
+import { decisionPrompt, pickSearchNotice, SUMMARY_PROMPT, SYSTEM_PROMPT } from './prompts.js';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const MODEL_CONFIG_CANDIDATES = [
@@ -669,14 +669,18 @@ export async function generateResponse(prompt, history, model = OLLAMA_MODEL) {
     });
 }
 
+// 会話履歴を要約する（/o-summary コマンド用の公開 API）
+export async function summarizeConversation(history, model = OLLAMA_MODEL) {
+    return await summarizeHistory(defaultClient, model, history);
+}
+
 async function summarizeHistory(client, model, history) {
     if (!history?.length) return null;
 
     const messages = [
         {
             role: 'system',
-            content:
-                '以下の会話履歴を簡潔に要約してください。重要な事実・前提・未解決事項を保持してください。'
+            content: SUMMARY_PROMPT
         },
         {
             role: 'user',
