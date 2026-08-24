@@ -660,6 +660,11 @@ export const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen3.5:9b';
 export const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://ollama:11434';
 
 const defaultClient = createOllamaClient({ baseURL: OLLAMA_BASE_URL });
+// summarizeHistory などの生 API 呼び出し用の HTTP クライアント
+const defaultHttpClient = createHttpClient({
+    baseURL: OLLAMA_BASE_URL,
+    timeout: DEFAULT_REQUEST_TIMEOUT_MS
+});
 
 export async function generateResponse(prompt, history, model = OLLAMA_MODEL) {
     return await defaultClient.generate({
@@ -671,7 +676,7 @@ export async function generateResponse(prompt, history, model = OLLAMA_MODEL) {
 
 // 会話履歴を要約する（/o-summary コマンド用の公開 API）
 export async function summarizeConversation(history, model = OLLAMA_MODEL) {
-    return await summarizeHistory(defaultClient, model, history);
+    return await summarizeHistory(defaultHttpClient, model, history);
 }
 
 async function summarizeHistory(client, model, history) {
