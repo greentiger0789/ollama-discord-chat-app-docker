@@ -2,6 +2,7 @@ import { createLogger } from '../logger.js';
 import { buildMaidThinkingMessage, sendSplitMessage } from '../messageUtils.js';
 import { generateResponse } from '../ollamaClient.js';
 import { addToThreadHistory, getThreadHistory, initializeThread } from '../threadManager.js';
+import { generateThreadName } from '../threadNaming.js';
 
 const logger = createLogger('oCommand');
 
@@ -12,7 +13,8 @@ const defaultDeps = {
     generateResponse,
     getThreadHistory,
     addToThreadHistory,
-    initializeThread
+    initializeThread,
+    generateThreadName
 };
 
 export function createHandleOCommand(deps = defaultDeps) {
@@ -22,7 +24,8 @@ export function createHandleOCommand(deps = defaultDeps) {
         generateResponse,
         getThreadHistory,
         addToThreadHistory,
-        initializeThread
+        initializeThread,
+        generateThreadName: nameThread
     } = { ...defaultDeps, ...deps };
 
     return async function handleOCommand(interaction) {
@@ -40,7 +43,7 @@ export function createHandleOCommand(deps = defaultDeps) {
             });
 
             const thread = await replyMsg.startThread({
-                name: `o-${interaction.user.username}-${Date.now() % 10000}`,
+                name: nameThread(prompt, interaction.user.username),
                 autoArchiveDuration: 60
             });
             logger.info('Created response thread for /o command', {

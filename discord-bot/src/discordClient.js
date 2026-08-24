@@ -1,8 +1,8 @@
 import { REST } from '@discordjs/rest';
 import { Client, GatewayIntentBits } from 'discord.js';
 import { Routes } from 'discord-api-types/v10';
-import { createLogger } from './logger.js';
 import './loadEnv.js';
+import { createLogger } from './logger.js';
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const GUILD_ID = process.env.DISCORD_GUILD_ID;
@@ -35,6 +35,14 @@ const commands = [
                 required: true
             }
         ]
+    },
+    {
+        name: 'o-reset',
+        description: 'このスレッドの会話履歴をリセットします'
+    },
+    {
+        name: 'o-summary',
+        description: 'これまでの会話の要約を出力します'
     }
 ];
 

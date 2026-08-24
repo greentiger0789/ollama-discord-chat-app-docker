@@ -1,5 +1,9 @@
+// loadEnv は他モジュールのトップレベル process.env 読み取り（OLLAMA_MODEL 等）より
+// 先に実行される必要があるため、biome の organizeImports 対象外とする
 import './src/loadEnv.js';
 import { handleOCommand } from './src/commands/oCommand.js';
+import { handleOResetCommand } from './src/commands/resetCommand.js';
+import { handleOSummaryCommand } from './src/commands/summaryCommand.js';
 import { client, DISCORD_TOKEN, registerCommands } from './src/discordClient.js';
 import { handleThreadMessage } from './src/handlers/threadMessageHandler.js';
 import { createLogger } from './src/logger.js';
@@ -23,9 +27,18 @@ client.once('clientReady', async () => {
 
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
-    if (interaction.commandName !== 'o') return;
 
-    await handleOCommand(interaction);
+    switch (interaction.commandName) {
+        case 'o':
+            await handleOCommand(interaction);
+            break;
+        case 'o-reset':
+            await handleOResetCommand(interaction);
+            break;
+        case 'o-summary':
+            await handleOSummaryCommand(interaction);
+            break;
+    }
 });
 
 /* ========================================================= */

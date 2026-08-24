@@ -10,6 +10,7 @@ import {
     decisionPrompt,
     pickSearchNotice,
     prompts,
+    SUMMARY_PROMPT,
     SYSTEM_PROMPT,
     searchNotices
 } from '../src/prompts.js';
@@ -75,8 +76,15 @@ describe('prompt exports', () => {
         assert.deepEqual(prompts, {
             system: SYSTEM_PROMPT,
             decision: decisionPrompt,
-            searchNotices
+            searchNotices,
+            summary: SUMMARY_PROMPT,
+            threadName: undefined
         });
+    });
+
+    test('should expose summary prompt with fallback default', () => {
+        assert.equal(typeof SUMMARY_PROMPT, 'string');
+        assert.ok(SUMMARY_PROMPT.length > 0, 'SUMMARY_PROMPT should not be empty');
     });
 
     test('should preserve legacy prompt module compatibility', () => {
