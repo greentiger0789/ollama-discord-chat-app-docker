@@ -48,6 +48,8 @@ export function createHandleOSummaryCommand(deps = defaultDeps) {
             const summary = await summarize(history);
 
             await sendSplitMessage(interaction.channel, summary, thinkingMsg);
+            // deferReply を確定させる（未解決のままにすると「考え中...」が残り続ける）
+            await interaction.deleteReply().catch(() => {});
             logger.info('Completed thread summary', {
                 threadId,
                 historyLength: history.length,

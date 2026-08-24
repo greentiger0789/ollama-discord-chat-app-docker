@@ -111,6 +111,7 @@ describe('summaryCommand', () => {
             let capturedHistory = null;
             let capturedSummary = null;
             let deferCalled = false;
+            let deleteReplyCalled = false;
 
             const mockInteraction = {
                 channel: {
@@ -122,6 +123,9 @@ describe('summaryCommand', () => {
                 reply: async () => {},
                 deferReply: async () => {
                     deferCalled = true;
+                },
+                deleteReply: async () => {
+                    deleteReplyCalled = true;
                 }
             };
 
@@ -142,6 +146,8 @@ describe('summaryCommand', () => {
             assert.equal(deferCalled, true);
             assert.deepEqual(capturedHistory, history);
             assert.equal(capturedSummary, 'これは要約です');
+            // deferReply を確定させるため deleteReply が呼ばれることを検証
+            assert.equal(deleteReplyCalled, true);
         });
 
         test('should follow up ephemeral error when summarizeConversation throws', async () => {
