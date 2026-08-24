@@ -1,6 +1,5 @@
 // loadEnv は他モジュールのトップレベル process.env 読み取り（OLLAMA_MODEL 等）より
 // 先に実行される必要があるため、biome の organizeImports 対象外とする
-// biome-ignore lint/assist/source/organizeImports: 副作用 import の実行順序を保証する
 import './src/loadEnv.js';
 import { handleOCommand } from './src/commands/oCommand.js';
 import { handleOResetCommand } from './src/commands/resetCommand.js';
