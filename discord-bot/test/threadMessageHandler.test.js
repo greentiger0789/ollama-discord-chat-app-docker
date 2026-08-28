@@ -49,6 +49,66 @@ describe('threadMessageHandler', () => {
     });
 
     describe('handleThreadMessage with mock message', () => {
+        test('should not persist or report an error when a generation is aborted', async () => {
+            const added = [];
+            const sent = [];
+            let controller = null;
+            const thinkingMessage = {
+                id: 'thinking-abort',
+                edit: async content => sent.push({ type: 'edit', content }),
+                react: async () => {}
+            };
+            const message = {
+                channel: {
+                    id: 'thread-abort',
+                    isThread: () => true,
+                    send: async content => {
+                        sent.push({ type: 'send', content });
+                        return thinkingMessage;
+                    }
+                },
+                author: { bot: false, id: 'user-1' },
+                content: '中断する質問'
+            };
+
+            const handling = handleThreadMessage(message, {
+                buildMaidThinkingMessage: () => '考え中…',
+                getThreadHistory: () => [],
+                addToThreadHistory: (_threadId, entry) => added.push(entry),
+                setThreadHistory: () => {},
+                registerGeneration: (_threadId, entry) => {
+                    controller = entry.controller;
+                    return { ...entry, state: 'generating' };
+                },
+                completeGeneration: () => {},
+                generateResponse: async (_prompt, _history, { signal }) => {
+                    queueMicrotask(() => controller.abort());
+                    return await new Promise((_resolve, reject) => {
+                        signal.addEventListener(
+                            'abort',
+                            () => {
+                                const err = new Error('aborted');
+                                err.name = 'ResponseAbortedError';
+                                reject(err);
+                            },
+                            { once: true }
+                        );
+                    });
+                },
+                sendSplitMessage: async () => {
+                    assert.fail('aborted generation must not send a response');
+                }
+            });
+
+            await handling;
+
+            assert.deepEqual(added, [{ role: 'user', text: '中断する質問', speaker: 'ユーザー' }]);
+            assert.ok(
+                sent.some(item => item.type === 'edit' && item.content === '✖️ 中断しました。')
+            );
+            assert.ok(!sent.some(item => item.content === 'エラーが発生しました。'));
+        });
+
         test('should return early for non-thread channels', async () => {
             const mockMessage = {
                 channel: {

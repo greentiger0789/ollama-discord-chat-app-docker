@@ -3,9 +3,15 @@ import {
     createAttachmentHistoryText as defaultCreateAttachmentHistoryText,
     loadAttachmentText as defaultLoadAttachmentText
 } from '../attachmentLoader.js';
+import {
+    clearCompletedGeneration as defaultClearCompletedGeneration,
+    completeGeneration as defaultCompleteGeneration,
+    registerGeneration as defaultRegisterGeneration
+} from '../generationRegistry.js';
 import { createLogger } from '../logger.js';
 import * as messageUtils from '../messageUtils.js';
 import * as ollamaClient from '../ollamaClient.js';
+import { isResponseAbortedError } from '../ollamaClient.js';
 import { resolveSpeakerName as defaultResolveSpeakerName } from '../speakerUtils.js';
 import * as threadManager from '../threadManager.js';
 
@@ -21,6 +27,8 @@ export async function handleThreadMessage(message, deps = {}) {
     if (message.author.bot) return;
 
     const threadId = message.channel.id;
+    const { clearCompletedGeneration = defaultClearCompletedGeneration } = deps;
+    clearCompletedGeneration(threadId);
     return await enqueueThreadTask(threadId, () => processThreadMessage(message, deps));
 }
 
@@ -51,7 +59,10 @@ async function processThreadMessage(message, deps = {}) {
         fetchReferencedMessage = defaultFetchReferencedMessage,
         loadAttachmentText = defaultLoadAttachmentText,
         composePromptWithAttachment: composeAttachmentPrompt = composePromptWithAttachment,
-        createAttachmentHistoryText: createHistoryText = defaultCreateAttachmentHistoryText
+        createAttachmentHistoryText: createHistoryText = defaultCreateAttachmentHistoryText,
+        registerGeneration = defaultRegisterGeneration,
+        completeGeneration = defaultCompleteGeneration,
+        setThreadHistory = threadManager.setThreadHistory
     } = deps;
 
     const threadId = message.channel.id;
@@ -116,25 +127,104 @@ async function processThreadMessage(message, deps = {}) {
         speaker
     });
 
+    const generation = {
+        channel: message.channel,
+        threadId,
+        prompt: composedText,
+        history,
+        speaker,
+        userId: message.author?.id,
+        buildThinking: buildMaidThinkingMessage,
+        sendSplitMessage,
+        generateResponse,
+        addToThreadHistory,
+        getThreadHistory,
+        setThreadHistory,
+        registerGeneration,
+        completeGeneration,
+        deps
+    };
+
     try {
-        const thinkingMsg = await message.channel.send(buildMaidThinkingMessage());
-
-        const responseText = await generateResponse(composedText, history, { speaker });
-
-        addToThreadHistory(threadId, {
-            role: 'assistant',
-            text: responseText
-        });
-
-        await sendSplitMessage(message.channel, responseText, thinkingMsg);
-        logger.info('Completed thread follow-up response', {
-            threadId,
-            responseLength: responseText.length
-        });
+        await runThreadGeneration(generation);
     } catch (err) {
         logger.error('Error generating follow-up', err, {
             threadId
         });
         await message.channel.send('エラーが発生しました。');
     }
+}
+
+async function runThreadGeneration(generation) {
+    const thinkingMsg = await generation.channel.send(generation.buildThinking());
+    await addGenerationReactions(thinkingMsg);
+
+    const controller = new AbortController();
+    const entry = generation.registerGeneration(generation.threadId, {
+        controller,
+        thinkingMsg,
+        userId: generation.userId
+    });
+    entry.regenerate = async () => {
+        if (entry.state === 'completed') {
+            const currentHistory = generation.getThreadHistory(generation.threadId);
+            if (currentHistory.at(-1)?.role === 'assistant') {
+                generation.setThreadHistory(generation.threadId, currentHistory.slice(0, -1));
+            }
+        }
+
+        return await enqueueThreadTask(generation.threadId, async () => {
+            await runThreadGeneration(generation);
+        });
+    };
+
+    try {
+        const responseText = await generation.generateResponse(
+            generation.prompt,
+            generation.history,
+            {
+                speaker: generation.speaker,
+                signal: controller.signal
+            }
+        );
+        if (controller.signal.aborted) {
+            throw new Error('Response aborted by user');
+        }
+
+        generation.addToThreadHistory(generation.threadId, {
+            role: 'assistant',
+            text: responseText
+        });
+        await generation.sendSplitMessage(generation.channel, responseText, thinkingMsg);
+        generation.completeGeneration(generation.threadId, entry);
+        logger.info('Completed thread follow-up response', {
+            threadId: generation.threadId,
+            responseLength: responseText.length
+        });
+    } catch (err) {
+        if (isResponseAbortedError(err) || controller.signal.aborted) {
+            await showGenerationStopped(thinkingMsg, entry.abortMessage || '✖️ 中断しました。');
+            return;
+        }
+
+        generation.completeGeneration(generation.threadId, entry);
+        throw err;
+    }
+}
+
+async function addGenerationReactions(thinkingMsg) {
+    if (typeof thinkingMsg?.react !== 'function') return;
+
+    for (const emoji of ['❌', '🔄']) {
+        try {
+            await thinkingMsg.react(emoji);
+        } catch (err) {
+            logger.warn('Failed to add generation control reaction', err, { emoji });
+        }
+    }
+}
+
+async function showGenerationStopped(thinkingMsg, content) {
+    await thinkingMsg.edit(content).catch(() => {});
+    await thinkingMsg.reactions?.removeAll?.().catch(() => {});
 }

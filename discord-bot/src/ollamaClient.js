@@ -57,8 +57,8 @@ function createTavilyClient(apiKey = process.env.TAVILY_API_KEY) {
 }
 
 // デフォルトの検索関数
-const defaultSearchFn = async plan =>
-    executeSearchWithDeps(plan, createTavilyClient(), createHttpClient());
+const defaultSearchFn = async (plan, { signal } = {}) =>
+    executeSearchWithDeps(plan, createTavilyClient(), createHttpClient(), { signal });
 
 export default function createOllamaClient({
     baseURL = 'http://ollama:11434',
@@ -67,7 +67,13 @@ export default function createOllamaClient({
 } = {}) {
     const client = httpClient;
 
-    async function generate({ model = 'qwen3.5:9b', prompt = '', history = [], speaker } = {}) {
+    async function generate({
+        model = 'qwen3.5:9b',
+        prompt = '',
+        history = [],
+        speaker,
+        signal
+    } = {}) {
         /* =========================================
            ① トークン概算（かなり安全寄り）
         ========================================= */
@@ -110,7 +116,9 @@ export default function createOllamaClient({
                 limit: LIMIT
             });
 
-            const summary = await summarizeHistory(client, model, oldHistory, multiUser);
+            const summary = await summarizeHistory(client, model, oldHistory, multiUser, {
+                signal
+            });
 
             processedHistory = [
                 {
@@ -125,12 +133,14 @@ export default function createOllamaClient({
            ③ 検索判定
         ========================================= */
 
-        const plan = await decideSearchPlan(client, model, prompt);
+        throwIfAborted(signal);
+        const plan = await decideSearchPlan(client, model, prompt, { signal });
 
         let searchResults = '';
         if (plan.needSearch) {
-            searchResults = await searchFn(plan);
+            searchResults = await searchFn(plan, { signal });
         }
+        throwIfAborted(signal);
 
         // 検索を実行した場合は返信の先頭に検索済みである旨を付与
         const didSearch = plan.needSearch && !!searchResults;
@@ -169,12 +179,16 @@ export default function createOllamaClient({
 
         try {
             const modelOptions = getModelOptions(model);
-            const { content, data } = await requestAssistantContentWithRetry(client, {
-                model,
-                messages: finalMessages,
-                stream: false,
-                options: modelOptions
-            });
+            const { content, data } = await requestAssistantContentWithRetry(
+                client,
+                {
+                    model,
+                    messages: finalMessages,
+                    stream: false,
+                    options: modelOptions
+                },
+                { signal }
+            );
 
             if (content !== null) {
                 return didSearch ? prependSearchNotice(content) : content;
@@ -192,6 +206,9 @@ export default function createOllamaClient({
             });
             return '回答形式を解析できませんでした。';
         } catch (err) {
+            if (isResponseAbortedError(err)) {
+                throw err;
+            }
             if (err.response?.data) {
                 try {
                     return await streamToString(err.response.data);
@@ -206,7 +223,7 @@ export default function createOllamaClient({
 
 /* ===================================================== */
 
-async function decideSearchPlan(client, model, prompt) {
+async function decideSearchPlan(client, model, prompt, { signal } = {}) {
     const forceKeywords = [
         '今日',
         '明日',
@@ -238,7 +255,7 @@ async function decideSearchPlan(client, model, prompt) {
                     num_predict: 200
                 }
             },
-            { think: false }
+            { think: false, signal }
         );
 
         const raw = res.data?.message?.content || res.data?.choices?.[0]?.message?.content || '{}';
@@ -258,6 +275,9 @@ async function decideSearchPlan(client, model, prompt) {
         });
         return plan;
     } catch (err) {
+        if (isResponseAbortedError(err)) {
+            throw err;
+        }
         const fallbackPlan = {
             needSearch: hasForceKeyword,
             engine: 'tavily',
@@ -278,7 +298,7 @@ async function decideSearchPlan(client, model, prompt) {
 /* 🌐 検索（依存関係注入版）
 /* ===================================================== */
 
-export async function executeSearchWithDeps(plan, tavilyClient, httpClient) {
+export async function executeSearchWithDeps(plan, tavilyClient, httpClient, { signal } = {}) {
     if (!plan.searchQuery) {
         logger.warn('Search skipped because the query is invalid', {
             engine: plan.engine || 'unknown'
@@ -289,7 +309,7 @@ export async function executeSearchWithDeps(plan, tavilyClient, httpClient) {
         logger.info('Using DuckDuckGo for web search', {
             query: summarizeQuery(plan.searchQuery)
         });
-        return await searchDuckDuckGoWithDeps(plan.searchQuery, httpClient);
+        return await searchDuckDuckGoWithDeps(plan.searchQuery, httpClient, { signal });
     }
 
     logger.info('Using Tavily for web search', {
@@ -305,7 +325,7 @@ export async function executeSearchWithDeps(plan, tavilyClient, httpClient) {
         query: summarizeQuery(plan.searchQuery),
         reason: tavilyResult.reason || 'unknown'
     });
-    const ddgResult = await executeDuckDuckGoSearch(plan.searchQuery, httpClient);
+    const ddgResult = await executeDuckDuckGoSearch(plan.searchQuery, httpClient, { signal });
 
     if (ddgResult.status === SEARCH_STATUS_SUCCESS) {
         logger.info('DuckDuckGo fallback succeeded', {
@@ -387,18 +407,18 @@ URL: ${r.url}`
     }
 }
 
-export async function searchDuckDuckGoWithDeps(query, httpClient) {
-    const result = await executeDuckDuckGoSearch(query, httpClient);
+export async function searchDuckDuckGoWithDeps(query, httpClient, { signal } = {}) {
+    const result = await executeDuckDuckGoSearch(query, httpClient, { signal });
     return result.message;
 }
 
-async function executeDuckDuckGoSearch(query, httpClient) {
+async function executeDuckDuckGoSearch(query, httpClient, { signal } = {}) {
     try {
         logger.info('Calling DuckDuckGo search', {
             query: summarizeQuery(query)
         });
         const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
-        const res = await httpClient.get(url);
+        const res = await httpClient.get(url, { signal });
 
         const topics = Array.isArray(res.data?.RelatedTopics) ? res.data.RelatedTopics : [];
         const results = flattenDuckDuckGoTopics(topics)
@@ -572,8 +592,8 @@ function summarizeResponseShape(data) {
     };
 }
 
-async function requestAssistantContentWithRetry(client, payload) {
-    const res = await postChat(client, payload, { think: true });
+async function requestAssistantContentWithRetry(client, payload, { signal } = {}) {
+    const res = await postChat(client, payload, { think: true, signal });
     const content = extractAssistantMessage(res.data);
 
     if (content !== null) {
@@ -583,6 +603,8 @@ async function requestAssistantContentWithRetry(client, payload) {
     if (!shouldRetryThinkingOnlyResponse(res.data)) {
         return { content: null, data: res.data };
     }
+
+    throwIfAborted(signal);
 
     const retryOptions = buildThinkingRetryOptions(payload.options);
     if (!retryOptions) {
@@ -600,7 +622,7 @@ async function requestAssistantContentWithRetry(client, payload) {
             ...payload,
             options: retryOptions
         },
-        { think: true }
+        { think: true, signal }
     );
 
     return {
@@ -687,16 +709,21 @@ const defaultHttpClient = createHttpClient({
 });
 
 export async function generateResponse(prompt, history, modelOrOptions = OLLAMA_MODEL) {
-    const { model, speaker } =
+    const { model, speaker, signal } =
         typeof modelOrOptions === 'string'
             ? { model: modelOrOptions }
-            : { model: modelOrOptions?.model ?? OLLAMA_MODEL, speaker: modelOrOptions?.speaker };
+            : {
+                  model: modelOrOptions?.model ?? OLLAMA_MODEL,
+                  speaker: modelOrOptions?.speaker,
+                  signal: modelOrOptions?.signal
+              };
 
     return await defaultClient.generate({
         model,
         prompt,
         history,
-        speaker
+        speaker,
+        signal
     });
 }
 
@@ -705,7 +732,13 @@ export async function summarizeConversation(history, model = OLLAMA_MODEL) {
     return await summarizeHistory(defaultHttpClient, model, history);
 }
 
-async function summarizeHistory(client, model, history, multiUser = isMultiUserHistory(history)) {
+async function summarizeHistory(
+    client,
+    model,
+    history,
+    multiUser = isMultiUserHistory(history),
+    { signal } = {}
+) {
     if (!history?.length) return null;
 
     const messages = [
@@ -735,7 +768,7 @@ async function summarizeHistory(client, model, history, multiUser = isMultiUserH
                 num_predict: 512
             }
         },
-        { think: false }
+        { think: false, signal }
     );
 
     return extractAssistantMessage(res.data);
@@ -766,20 +799,22 @@ export function createHttpClient({
     fetchImpl = fetch
 } = {}) {
     return {
-        post: async (resource, data) =>
+        post: async (resource, data, { signal } = {}) =>
             requestJson({
                 url: resolveRequestUrl(baseURL, resource),
                 method: 'POST',
                 json: data,
                 timeout,
-                fetchImpl
+                fetchImpl,
+                signal
             }),
-        get: async resource =>
+        get: async (resource, { signal } = {}) =>
             requestJson({
                 url: resolveRequestUrl(baseURL, resource),
                 method: 'GET',
                 timeout,
-                fetchImpl
+                fetchImpl,
+                signal
             })
     };
 }
@@ -800,12 +835,16 @@ function ensureTrailingSlash(url) {
     return url.endsWith('/') ? url : `${url}/`;
 }
 
-async function postChat(client, payload, { think = true } = {}) {
+async function postChat(client, payload, { think = true, signal } = {}) {
     try {
-        return await client.post('/api/chat', {
-            think,
-            ...payload
-        });
+        return await client.post(
+            '/api/chat',
+            {
+                think,
+                ...payload
+            },
+            { signal }
+        );
     } catch (err) {
         if (isUnsupportedThinkParameterError(err)) {
             logger.warn(
@@ -814,7 +853,8 @@ async function postChat(client, payload, { think = true } = {}) {
                     model: payload.model
                 }
             );
-            return await client.post('/api/chat', payload);
+            throwIfAborted(signal);
+            return await client.post('/api/chat', payload, { signal });
         }
 
         throw err;
@@ -834,16 +874,36 @@ function isUnsupportedThinkParameterError(err) {
     );
 }
 
-export async function requestJson({ url, method, json, timeout, fetchImpl = fetch }) {
+export class ResponseAbortedError extends Error {
+    constructor(cause) {
+        super('Request aborted by user', { cause });
+        this.name = 'ResponseAbortedError';
+    }
+}
+
+export function isResponseAbortedError(err) {
+    return err?.name === 'ResponseAbortedError';
+}
+
+function throwIfAborted(signal) {
+    if (signal?.aborted) {
+        throw new ResponseAbortedError(signal.reason);
+    }
+}
+
+export async function requestJson({ url, method, json, timeout, signal, fetchImpl = fetch }) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
+    const combinedSignal = signal
+        ? AbortSignal.any([controller.signal, signal])
+        : controller.signal;
 
     try {
         const response = await fetchImpl(url, {
             method,
             headers: json ? { 'content-type': 'application/json' } : undefined,
             body: json ? JSON.stringify(json) : undefined,
-            signal: controller.signal
+            signal: combinedSignal
         });
 
         const data = await parseResponseBody(response);
@@ -859,6 +919,9 @@ export async function requestJson({ url, method, json, timeout, fetchImpl = fetc
 
         return { data };
     } catch (err) {
+        if (signal?.aborted) {
+            throw new ResponseAbortedError(err);
+        }
         if (err.name === 'AbortError') {
             const timeoutError = new Error(`Request timed out after ${timeout}ms`);
             timeoutError.cause = err;

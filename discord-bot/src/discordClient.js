@@ -1,5 +1,5 @@
 import { REST } from '@discordjs/rest';
-import { Client, GatewayIntentBits } from 'discord.js';
+import { Client, GatewayIntentBits, Partials } from 'discord.js';
 import { Routes } from 'discord-api-types/v10';
 import './loadEnv.js';
 import { createLogger } from './logger.js';
@@ -17,8 +17,10 @@ const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.GuildMessageReactions,
         GatewayIntentBits.MessageContent
-    ]
+    ],
+    partials: [Partials.Message, Partials.Reaction]
 });
 
 const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);

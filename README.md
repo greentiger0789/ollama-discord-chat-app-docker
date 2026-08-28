@@ -9,6 +9,7 @@ Ollama をバックエンドに使用した Discord ボットです。「メイ�
 - **Ollama 連携**: ローカル LLM（NVIDIA GPU 対応）およびクラウドモデルを活用
 - **Slash Command**: `/o` コマンドで質問するとスレッドを作成して応答
 - **会話履歴管理**: スレッド単位で履歴を保持し、長くなると自動要約
+- **応答の中断・再生成**: 応答中または直近の応答に ❌ / 🔄 を付けて、実行者が中断・再生成可能
 - **複数人会話**: 複数の参加者を区別し、最新の発言者を優先して応答
 - **Web 検索**: Tavily（失敗時 DuckDuckGo にフォールバック）でリアルタイム検索
 - **ホットリロード開発**: ソース・設定・`.env` の変更を自動検出して再起動
@@ -64,6 +65,7 @@ Discord で `/o` コマンドを実行し、Bot がスレッドを作成して�
 - `prompt`（必須）にプロンプトを送信すると、スレッドを作成して応答
 - `file`（任意）にテキストファイルを添付すると、内容を踏まえて回答（512KB・20,000文字まで）
 - スレッド内のメッセージにも文脈を引き継いで返信
+- 「考え中…」および直近の応答には ❌（中断）と 🔄（再生成）が付き、`/o` を実行した本人またはスレッド内で発言した本人が操作可能
 - 長文応答は 1900 文字単位で自動分割送信
 
 添付はテキスト、コード、ログなどに対応します。画像・動画・音声・PDF・圧縮ファイルなどは
@@ -203,7 +205,7 @@ PR 作成前には `make lint` と `make test` を通しておくこと。
 
 | 症状 | 確認ポイント |
 |------|-------------|
-| Bot が応答しない | `DISCORD_TOKEN`、Bot の権限（Send Messages / Read Message History / Embed Links / Manage Threads）、Ollama サーバーの起動状態 |
+| Bot が応答しない | `DISCORD_TOKEN`、Bot の権限（Send Messages / Read Message History / Add Reactions / Embed Links / Manage Threads）、Ollama サーバーの起動状態 |
 | Ollama に接続できない | `OLLAMA_BASE_URL`、コンテナ間ネットワーク、`docker compose logs ollama` のヘルスチェック |
 | Web 検索が機能しない | `TAVILY_API_KEY`、API レート制限 |
 

@@ -9,6 +9,7 @@ A Discord bot powered by Ollama. It provides Q&A, web search, and per-thread con
 - **Ollama integration**: Leverages local LLMs (NVIDIA GPU support) as well as cloud models
 - **Slash command**: Ask with the `/o` command and the bot replies in a created thread
 - **Conversation history**: Keeps history per thread and automatically summarizes it when it grows long
+- **Abort and regenerate**: The requester can use ❌ / 🔄 on an in-progress or most recent response
 - **Multi-user conversations**: Distinguishes participants and prioritizes the most recent speaker
 - **Web search**: Real-time search via Tavily (falls back to DuckDuckGo on failure)
 - **Hot-reload development**: Automatically restarts on changes to source, config, or `.env`
@@ -64,6 +65,7 @@ Run the `/o` command in Discord. If the bot creates a thread and replies, you ar
 - Send a prompt via the required `prompt` option; the bot creates a thread and replies
 - Optionally attach a text file with `file` to include its contents in the answer (up to 512KB and 20,000 characters)
 - Follow-up messages inside the thread keep the conversation context
+- The “thinking” and most recent response messages include ❌ (abort) and 🔄 (regenerate), available to the user who started that response
 - Long responses are automatically split into 1900-character chunks
 
 Text files, source code, and logs are supported. Images, videos, audio, PDFs, and archive files
@@ -203,7 +205,7 @@ Make sure `make lint` and `make test` pass before creating a PR.
 
 | Symptom | Things to check |
 |---------|-----------------|
-| Bot does not respond | `DISCORD_TOKEN`, bot permissions (Send Messages / Read Message History / Embed Links / Manage Threads), Ollama server status |
+| Bot does not respond | `DISCORD_TOKEN`, bot permissions (Send Messages / Read Message History / Add Reactions / Embed Links / Manage Threads), Ollama server status |
 | Cannot connect to Ollama | `OLLAMA_BASE_URL`, inter-container networking, health check via `docker compose logs ollama` |
 | Web search not working | `TAVILY_API_KEY`, API rate limits |
 
