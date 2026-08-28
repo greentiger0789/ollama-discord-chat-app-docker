@@ -5,6 +5,7 @@ import { handleOCommand } from './src/commands/oCommand.js';
 import { handleOResetCommand } from './src/commands/resetCommand.js';
 import { handleOSummaryCommand } from './src/commands/summaryCommand.js';
 import { client, DISCORD_TOKEN, registerCommands } from './src/discordClient.js';
+import { handleMentionMessage } from './src/handlers/mentionHandler.js';
 import { handleThreadMessage } from './src/handlers/threadMessageHandler.js';
 import { createLogger } from './src/logger.js';
 
@@ -42,11 +43,16 @@ client.on('interactionCreate', async interaction => {
 });
 
 /* ========================================================= */
-/* Thread Follow-up */
+/* Message Responses */
 /* ========================================================= */
 
 client.on('messageCreate', async message => {
-    await handleThreadMessage(message);
+    if (message.channel.isThread()) {
+        await handleThreadMessage(message);
+        return;
+    }
+
+    await handleMentionMessage(message, { clientId: client.user?.id });
 });
 
 /* ========================================================= */
