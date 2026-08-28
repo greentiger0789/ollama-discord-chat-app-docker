@@ -47,6 +47,7 @@ export const TEXT_EXTENSION_ALLOWLIST = [
 ];
 
 const CDN_HOSTNAME = 'cdn.discordapp.com';
+const CDN_ATTACHMENT_PATH_PREFIXES = ['/attachments/', '/ephemeral-attachments/'];
 const TRUNCATION_SUFFIX = '…(省略)';
 const HISTORY_PREVIEW_CHARS = 500;
 
@@ -92,7 +93,7 @@ function isDiscordCdnUrl(url) {
             parsedUrl.protocol === 'https:' &&
             parsedUrl.hostname === CDN_HOSTNAME &&
             parsedUrl.port === '' &&
-            parsedUrl.pathname.startsWith('/attachments/')
+            CDN_ATTACHMENT_PATH_PREFIXES.some(prefix => parsedUrl.pathname.startsWith(prefix))
         );
     } catch {
         return false;

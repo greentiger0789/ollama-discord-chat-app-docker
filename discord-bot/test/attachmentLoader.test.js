@@ -112,6 +112,27 @@ describe('attachmentLoader', () => {
             assert.equal(fetchCalled, false);
         });
 
+        test('allows ephemeral attachment URLs returned for interactions', async () => {
+            const result = await loadAttachmentText(
+                createAttachment({
+                    url: 'https://cdn.discordapp.com/ephemeral-attachments/123/456/sample.txt'
+                }),
+                {
+                    fetchImpl: async () =>
+                        new Response('ephemeral attachment', {
+                            headers: { 'content-type': 'text/plain' }
+                        })
+                }
+            );
+
+            assert.deepEqual(result, {
+                ok: true,
+                name: 'sample.txt',
+                text: 'ephemeral attachment',
+                truncated: false
+            });
+        });
+
         test('revalidates the MIME type returned by the CDN', async () => {
             const result = await loadAttachmentText(createAttachment(), {
                 fetchImpl: async () =>
