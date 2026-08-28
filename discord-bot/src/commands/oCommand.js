@@ -3,11 +3,17 @@ import {
     createAttachmentHistoryText,
     loadAttachmentText
 } from '../attachmentLoader.js';
+import { completeGeneration, registerGeneration } from '../generationRegistry.js';
 import { createLogger } from '../logger.js';
 import { buildMaidThinkingMessage, sendSplitMessage } from '../messageUtils.js';
-import { generateResponse } from '../ollamaClient.js';
+import { generateResponse, isResponseAbortedError } from '../ollamaClient.js';
 import { resolveSpeakerName } from '../speakerUtils.js';
-import { addToThreadHistory, getThreadHistory, initializeThread } from '../threadManager.js';
+import {
+    addToThreadHistory,
+    getThreadHistory,
+    initializeThread,
+    setThreadHistory
+} from '../threadManager.js';
 import { generateThreadName } from '../threadNaming.js';
 
 const logger = createLogger('oCommand');
@@ -24,7 +30,10 @@ const defaultDeps = {
     resolveSpeakerName,
     loadAttachmentText,
     composePromptWithAttachment,
-    createAttachmentHistoryText
+    createAttachmentHistoryText,
+    setThreadHistory,
+    registerGeneration,
+    completeGeneration
 };
 
 export function createHandleOCommand(deps = defaultDeps) {
@@ -39,7 +48,10 @@ export function createHandleOCommand(deps = defaultDeps) {
         resolveSpeakerName,
         loadAttachmentText,
         composePromptWithAttachment,
-        createAttachmentHistoryText
+        createAttachmentHistoryText,
+        setThreadHistory,
+        registerGeneration,
+        completeGeneration
     } = { ...defaultDeps, ...deps };
 
     return async function handleOCommand(interaction) {
@@ -95,18 +107,23 @@ export function createHandleOCommand(deps = defaultDeps) {
                 .join('\n');
             await thread.send({ content: threadIntro, allowedMentions: { parse: [] } });
 
-            const thinkingMsg = await thread.send(buildThinking());
-
-            const responseText = await generateResponse(responsePrompt, history, { speaker });
-
-            addToThreadHistory(thread.id, { role: 'assistant', text: responseText });
-
-            await sendSplitMessage(thread, responseText, thinkingMsg);
-            logger.info('Completed /o command response', {
-                threadId: thread.id,
-                responseLength: responseText.length
+            await runCommandGeneration({
+                thread,
+                prompt: responsePrompt,
+                history,
+                speaker,
+                userId: interaction.user?.id,
+                buildThinking,
+                sendSplitMessage,
+                generateResponse,
+                addToThreadHistory,
+                getThreadHistory,
+                setThreadHistory,
+                registerGeneration,
+                completeGeneration
             });
         } catch (err) {
+            if (isResponseAbortedError(err)) return;
             logger.error('Error handling /o command', err, {
                 userId: interaction.user?.id || null
             });
@@ -122,3 +139,75 @@ export function createHandleOCommand(deps = defaultDeps) {
 
 // デフォルトのエクスポート（後方互換性）
 export const handleOCommand = createHandleOCommand();
+
+async function runCommandGeneration(generation) {
+    const thinkingMsg = await generation.thread.send(generation.buildThinking());
+    await addGenerationReactions(thinkingMsg);
+
+    const controller = new AbortController();
+    const entry = generation.registerGeneration(generation.thread.id, {
+        controller,
+        thinkingMsg,
+        userId: generation.userId
+    });
+    entry.regenerate = async () => {
+        if (entry.state === 'completed') {
+            const currentHistory = generation.getThreadHistory(generation.thread.id);
+            if (currentHistory.at(-1)?.role === 'assistant') {
+                generation.setThreadHistory(generation.thread.id, currentHistory.slice(0, -1));
+            }
+        }
+
+        await runCommandGeneration(generation);
+    };
+
+    try {
+        const responseText = await generation.generateResponse(
+            generation.prompt,
+            generation.history,
+            {
+                speaker: generation.speaker,
+                signal: controller.signal
+            }
+        );
+        if (controller.signal.aborted) {
+            throw new Error('Response aborted by user');
+        }
+
+        generation.addToThreadHistory(generation.thread.id, {
+            role: 'assistant',
+            text: responseText
+        });
+        await generation.sendSplitMessage(generation.thread, responseText, thinkingMsg);
+        generation.completeGeneration(generation.thread.id, entry);
+        logger.info('Completed /o command response', {
+            threadId: generation.thread.id,
+            responseLength: responseText.length
+        });
+    } catch (err) {
+        if (isResponseAbortedError(err) || controller.signal.aborted) {
+            await showGenerationStopped(thinkingMsg, entry.abortMessage || '✖️ 中断しました。');
+            return;
+        }
+
+        generation.completeGeneration(generation.thread.id, entry);
+        throw err;
+    }
+}
+
+async function addGenerationReactions(thinkingMsg) {
+    if (typeof thinkingMsg?.react !== 'function') return;
+
+    for (const emoji of ['❌', '🔄']) {
+        try {
+            await thinkingMsg.react(emoji);
+        } catch (err) {
+            logger.warn('Failed to add generation control reaction', err, { emoji });
+        }
+    }
+}
+
+async function showGenerationStopped(thinkingMsg, content) {
+    await thinkingMsg.edit(content).catch(() => {});
+    await thinkingMsg.reactions?.removeAll?.().catch(() => {});
+}

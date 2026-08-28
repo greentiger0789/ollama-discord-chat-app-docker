@@ -6,6 +6,7 @@ import { handleOResetCommand } from './src/commands/resetCommand.js';
 import { handleOSummaryCommand } from './src/commands/summaryCommand.js';
 import { client, DISCORD_TOKEN, registerCommands } from './src/discordClient.js';
 import { handleMentionMessage } from './src/handlers/mentionHandler.js';
+import { handleReactionAdd } from './src/handlers/reactionHandler.js';
 import { handleThreadMessage } from './src/handlers/threadMessageHandler.js';
 import { createLogger } from './src/logger.js';
 
@@ -53,6 +54,12 @@ client.on('messageCreate', async message => {
     }
 
     await handleMentionMessage(message, { clientId: client.user?.id });
+});
+
+client.on('messageReactionAdd', async (reaction, user) => {
+    await handleReactionAdd(reaction, user).catch(err => {
+        logger.error('Failed to handle generation control reaction', err);
+    });
 });
 
 /* ========================================================= */

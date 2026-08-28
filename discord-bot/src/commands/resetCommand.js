@@ -1,14 +1,16 @@
+import { clearGeneration } from '../generationRegistry.js';
 import { createLogger } from '../logger.js';
 import { clearThreadHistory } from '../threadManager.js';
 
 const logger = createLogger('resetCommand');
 
 const defaultDeps = {
-    clearThreadHistory
+    clearThreadHistory,
+    clearGeneration
 };
 
 export function createHandleOResetCommand(deps = defaultDeps) {
-    const { clearThreadHistory: clearHistory } = { ...defaultDeps, ...deps };
+    const { clearThreadHistory: clearHistory, clearGeneration } = { ...defaultDeps, ...deps };
 
     return async function handleOResetCommand(interaction) {
         if (!interaction.channel?.isThread?.()) {
@@ -22,6 +24,7 @@ export function createHandleOResetCommand(deps = defaultDeps) {
         const threadId = interaction.channel.id;
 
         try {
+            clearGeneration(threadId);
             clearHistory(threadId);
             logger.info('Cleared thread history', {
                 threadId,

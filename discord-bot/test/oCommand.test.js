@@ -154,7 +154,8 @@ describe('oCommand', () => {
                 { role: 'user', text: '初回プロンプト', speaker: 'testuser' },
                 { role: 'assistant', text: 'テスト応答' }
             ]);
-            assert.deepEqual(capturedOptions, { speaker: 'testuser' });
+            assert.equal(capturedOptions.speaker, 'testuser');
+            assert.ok(capturedOptions.signal instanceof AbortSignal);
         });
     });
 
@@ -305,6 +306,71 @@ describe('oCommand', () => {
     });
 
     describe('error handling', () => {
+        test('should not send an error follow-up when a generation is aborted', async () => {
+            const threadManager = await importFreshThreadManager();
+            const followUps = [];
+            const edits = [];
+            let controller = null;
+            let sendCount = 0;
+            const thinkingMessage = {
+                id: 'thinking-command-abort',
+                edit: async content => edits.push(content),
+                react: async () => {}
+            };
+            const thread = {
+                id: 'thread-command-abort',
+                send: async () => {
+                    sendCount++;
+                    return sendCount === 2 ? thinkingMessage : {};
+                }
+            };
+            const interaction = {
+                options: { getString: () => '中断する質問' },
+                deferReply: async () => {},
+                followUp: async content => {
+                    followUps.push(content);
+                    return { startThread: async () => thread };
+                },
+                user: { id: 'user-1', username: 'testuser' }
+            };
+
+            await createHandleOCommand({
+                getThreadHistory: threadManager.getThreadHistory,
+                addToThreadHistory: threadManager.addToThreadHistory,
+                initializeThread: threadManager.initializeThread,
+                setThreadHistory: threadManager.setThreadHistory,
+                buildMaidThinkingMessage: () => '考え中…',
+                sendSplitMessage: async () => {
+                    assert.fail('aborted generation must not send a response');
+                },
+                registerGeneration: (_threadId, entry) => {
+                    controller = entry.controller;
+                    return { ...entry, state: 'generating' };
+                },
+                completeGeneration: () => {},
+                generateResponse: async (_prompt, _history, { signal }) => {
+                    queueMicrotask(() => controller.abort());
+                    return await new Promise((_resolve, reject) => {
+                        signal.addEventListener(
+                            'abort',
+                            () => {
+                                const err = new Error('aborted');
+                                err.name = 'ResponseAbortedError';
+                                reject(err);
+                            },
+                            { once: true }
+                        );
+                    });
+                }
+            })(interaction);
+
+            assert.deepEqual(edits, ['✖️ 中断しました。']);
+            assert.equal(followUps.length, 1);
+            assert.deepEqual(threadManager.getThreadHistory(thread.id), [
+                { role: 'user', text: '中断する質問', speaker: 'testuser' }
+            ]);
+        });
+
         test('should handle errors gracefully', async () => {
             let errorFollowUpCalled = false;
             let errorFollowUpContent = null;

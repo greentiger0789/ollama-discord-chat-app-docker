@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test, { afterEach, describe } from 'node:test';
+import { Partials } from 'discord.js';
 
 const originalToken = process.env.DISCORD_TOKEN;
 const originalGuildId = process.env.DISCORD_GUILD_ID;
@@ -54,6 +55,12 @@ describe('discordClient exports', () => {
     test('client should have intents configured', async () => {
         const mod = await importFreshDiscordClient();
         assert.ok(mod.client.options.intents);
+    });
+
+    test('client should support partial reaction and message events', async () => {
+        const mod = await importFreshDiscordClient();
+        assert.ok(mod.client.options.partials.includes(Partials.Message));
+        assert.ok(mod.client.options.partials.includes(Partials.Reaction));
     });
 });
 

@@ -77,10 +77,11 @@ describe('resetCommand', () => {
     });
 
     describe('inside thread', () => {
-        test('should call clearThreadHistory with correct threadId', async () => {
+        test('should clear the history and generation controls with the correct threadId', async () => {
             const { createHandleOResetCommand } = await import('../src/commands/resetCommand.js');
 
             const clearedThreadIds = [];
+            const clearedGenerationIds = [];
             const replies = [];
             const mockInteraction = {
                 channel: {
@@ -96,12 +97,16 @@ describe('resetCommand', () => {
             const handler = createHandleOResetCommand({
                 clearThreadHistory: threadId => {
                     clearedThreadIds.push(threadId);
+                },
+                clearGeneration: threadId => {
+                    clearedGenerationIds.push(threadId);
                 }
             });
 
             await handler(mockInteraction);
 
             assert.deepEqual(clearedThreadIds, ['thread-123']);
+            assert.deepEqual(clearedGenerationIds, ['thread-123']);
             assert.equal(replies.length, 1);
             assert.match(replies[0].content, /リセット/);
             assert.notEqual(replies[0].ephemeral, true);
