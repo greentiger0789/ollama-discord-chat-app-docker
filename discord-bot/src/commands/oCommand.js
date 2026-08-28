@@ -1,3 +1,8 @@
+import {
+    composePromptWithAttachment,
+    createAttachmentHistoryText,
+    loadAttachmentText
+} from '../attachmentLoader.js';
 import { createLogger } from '../logger.js';
 import { buildMaidThinkingMessage, sendSplitMessage } from '../messageUtils.js';
 import { generateResponse } from '../ollamaClient.js';
@@ -16,7 +21,10 @@ const defaultDeps = {
     addToThreadHistory,
     initializeThread,
     generateThreadName,
-    resolveSpeakerName
+    resolveSpeakerName,
+    loadAttachmentText,
+    composePromptWithAttachment,
+    createAttachmentHistoryText
 };
 
 export function createHandleOCommand(deps = defaultDeps) {
@@ -28,19 +36,39 @@ export function createHandleOCommand(deps = defaultDeps) {
         addToThreadHistory,
         initializeThread,
         generateThreadName: nameThread,
-        resolveSpeakerName
+        resolveSpeakerName,
+        loadAttachmentText,
+        composePromptWithAttachment,
+        createAttachmentHistoryText
     } = { ...defaultDeps, ...deps };
 
     return async function handleOCommand(interaction) {
         const prompt = interaction.options.getString('prompt');
+        const attachment = interaction.options.getAttachment?.('file') || null;
         logger.info('Received /o command', {
             userId: interaction.user?.id || null,
-            promptLength: prompt?.length || 0
+            promptLength: prompt?.length || 0,
+            hasAttachment: Boolean(attachment)
         });
 
         await interaction.deferReply();
 
         try {
+            let responsePrompt = prompt;
+            let historyPrompt = prompt;
+            let attachmentName = null;
+            if (attachment) {
+                const result = await loadAttachmentText(attachment);
+                if (!result.ok) {
+                    await interaction.followUp({ content: result.message, ephemeral: true });
+                    return;
+                }
+
+                responsePrompt = composePromptWithAttachment(prompt, result);
+                historyPrompt = createAttachmentHistoryText(prompt, result);
+                attachmentName = result.name;
+            }
+
             const replyMsg = await interaction.followUp({
                 content: 'スレッドを作成しました'
             });
@@ -57,13 +85,19 @@ export function createHandleOCommand(deps = defaultDeps) {
             initializeThread(thread.id);
             const history = getThreadHistory(thread.id);
             const speaker = resolveSpeakerName(interaction);
-            addToThreadHistory(thread.id, { role: 'user', text: prompt, speaker });
+            addToThreadHistory(thread.id, { role: 'user', text: historyPrompt, speaker });
 
-            await thread.send(`**プロンプト:** ${prompt}`);
+            const threadIntro = [
+                `**プロンプト:** ${prompt}`,
+                attachmentName && `📎 添付: ${attachmentName}`
+            ]
+                .filter(Boolean)
+                .join('\n');
+            await thread.send({ content: threadIntro, allowedMentions: { parse: [] } });
 
             const thinkingMsg = await thread.send(buildThinking());
 
-            const responseText = await generateResponse(prompt, history, { speaker });
+            const responseText = await generateResponse(responsePrompt, history, { speaker });
 
             addToThreadHistory(thread.id, { role: 'assistant', text: responseText });
 

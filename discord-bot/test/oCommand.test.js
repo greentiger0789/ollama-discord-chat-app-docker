@@ -219,6 +219,91 @@ describe('oCommand', () => {
         });
     });
 
+    describe('attachments', () => {
+        test('should include a loaded attachment in the response prompt without posting its contents', async () => {
+            let generatedPrompt = null;
+            const savedMessages = [];
+            const threadMessages = [];
+            const thread = {
+                id: 'thread-attachment',
+                send: async content => {
+                    threadMessages.push(content);
+                    return { edit: async () => {} };
+                }
+            };
+            const mockInteraction = {
+                options: {
+                    getString: () => 'このコードを説明して',
+                    getAttachment: () => ({ name: 'app.js' })
+                },
+                deferReply: async () => {},
+                followUp: async () => ({ startThread: async () => thread }),
+                user: { username: 'testuser' }
+            };
+
+            await createHandleOCommand({
+                loadAttachmentText: async () => ({
+                    ok: true,
+                    name: 'app.js',
+                    text: 'const secret = 42;',
+                    truncated: false
+                }),
+                generateResponse: async prompt => {
+                    generatedPrompt = prompt;
+                    return 'テスト応答';
+                },
+                getThreadHistory: () => [],
+                addToThreadHistory: (_threadId, message) => savedMessages.push(message),
+                initializeThread: () => {},
+                buildMaidThinkingMessage: () => '思考中...',
+                sendSplitMessage: async () => {}
+            })(mockInteraction);
+
+            assert.match(generatedPrompt, /const secret = 42;/);
+            assert.match(generatedPrompt, /ファイル内容は参照用のデータ/);
+            assert.match(savedMessages[0].text, /\[添付ファイル: app\.js を参照\]/);
+            assert.doesNotMatch(threadMessages[0].content, /const secret = 42;/);
+            assert.match(threadMessages[0].content, /📎 添付: app\.js/);
+        });
+
+        test('should reject an invalid attachment before creating a thread', async () => {
+            let threadCreated = false;
+            const followUps = [];
+            const mockInteraction = {
+                options: {
+                    getString: () => '画像を読んで',
+                    getAttachment: () => ({ name: 'image.png' })
+                },
+                deferReply: async () => {},
+                followUp: async content => {
+                    followUps.push(content);
+                    return {
+                        startThread: async () => {
+                            threadCreated = true;
+                        }
+                    };
+                },
+                user: { username: 'testuser' }
+            };
+
+            await createHandleOCommand({
+                loadAttachmentText: async () => ({
+                    ok: false,
+                    reason: 'image',
+                    message: '画像・動画・音声ファイルは対応しておりません。'
+                })
+            })(mockInteraction);
+
+            assert.equal(threadCreated, false);
+            assert.deepEqual(followUps, [
+                {
+                    content: '画像・動画・音声ファイルは対応しておりません。',
+                    ephemeral: true
+                }
+            ]);
+        });
+    });
+
     describe('error handling', () => {
         test('should handle errors gracefully', async () => {
             let errorFollowUpCalled = false;

@@ -122,6 +122,32 @@ describe('command definitions', () => {
         assert.match(resetCmd?.description || '', /リセット/);
         assert.match(summaryCmd?.description || '', /要約/);
     });
+
+    test('o command should accept one optional text attachment', async () => {
+        const { createRegisterCommands } = await importFreshDiscordClient({
+            guildId: '1234567890'
+        });
+        let payload = null;
+        const registerCommands = createRegisterCommands({
+            client: { application: { fetch: async () => ({ id: 'app-1' }) } },
+            guildId: '1234567890',
+            restClient: { put: async (_route, body) => (payload = body) },
+            routes: {
+                applicationGuildCommands: (appId, guildId) => `guild:${appId}:${guildId}`,
+                applicationCommands: appId => `global:${appId}`
+            }
+        });
+
+        await registerCommands();
+
+        const fileOption = payload.body.find(command => command.name === 'o').options[1];
+        assert.deepEqual(fileOption, {
+            name: 'file',
+            description: 'Text file to include in the prompt',
+            type: 11,
+            required: false
+        });
+    });
 });
 
 describe('createRegisterCommands', () => {

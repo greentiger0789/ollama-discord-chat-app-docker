@@ -1,3 +1,8 @@
+import {
+    composePromptWithAttachment,
+    createAttachmentHistoryText as defaultCreateAttachmentHistoryText,
+    loadAttachmentText as defaultLoadAttachmentText
+} from '../attachmentLoader.js';
 import { createLogger } from '../logger.js';
 import * as messageUtils from '../messageUtils.js';
 import * as ollamaClient from '../ollamaClient.js';
@@ -43,7 +48,10 @@ async function processThreadMessage(message, deps = {}) {
         addToThreadHistory = threadManager.addToThreadHistory,
         getThreadHistory = threadManager.getThreadHistory,
         resolveSpeakerName = defaultResolveSpeakerName,
-        fetchReferencedMessage = defaultFetchReferencedMessage
+        fetchReferencedMessage = defaultFetchReferencedMessage,
+        loadAttachmentText = defaultLoadAttachmentText,
+        composePromptWithAttachment: composeAttachmentPrompt = composePromptWithAttachment,
+        createAttachmentHistoryText: createHistoryText = defaultCreateAttachmentHistoryText
     } = deps;
 
     const threadId = message.channel.id;
@@ -69,12 +77,42 @@ async function processThreadMessage(message, deps = {}) {
         }
     }
 
-    const composedText = replyContext ? `${replyContext}\n${message.content}` : message.content;
+    const messageText = message.content || '';
+    const attachments = Array.from(message.attachments?.values?.() || []);
+    let responsePrompt = messageText;
+    let historyPrompt = messageText;
+
+    if (attachments.length > 1) {
+        await message.channel.send('添付ファイルは最初の1件のみ読み込みます。');
+    }
+
+    if (attachments[0]) {
+        try {
+            const result = await loadAttachmentText(attachments[0]);
+            if (result.ok) {
+                responsePrompt = composeAttachmentPrompt(messageText, result);
+                historyPrompt = createHistoryText(messageText, result);
+            } else {
+                await message.channel.send(result.message);
+            }
+        } catch (err) {
+            logger.warn('Failed to load thread attachment', err, { threadId });
+            await message.channel.send('添付ファイルのダウンロードに失敗しました。');
+        }
+    }
+
+    if (!responsePrompt.trim()) {
+        await message.channel.send('質問文または読み込めるテキストファイルを送信してください。');
+        return;
+    }
+
+    const composedText = replyContext ? `${replyContext}\n${responsePrompt}` : responsePrompt;
+    const historyText = replyContext ? `${replyContext}\n${historyPrompt}` : historyPrompt;
     const speaker = resolveSpeakerName(message);
 
     addToThreadHistory(threadId, {
         role: 'user',
-        text: composedText,
+        text: historyText,
         speaker
     });
 
