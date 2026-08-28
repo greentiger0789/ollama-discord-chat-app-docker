@@ -33,6 +33,12 @@ const commands = [
                 description: 'Prompt to send',
                 type: 3,
                 required: true
+            },
+            {
+                name: 'file',
+                description: 'Text file to include in the prompt',
+                type: 11,
+                required: false
             }
         ]
     },

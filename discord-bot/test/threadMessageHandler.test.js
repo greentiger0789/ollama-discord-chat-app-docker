@@ -757,6 +757,130 @@ describe('threadMessageHandler', () => {
         });
     });
 
+    describe('attachments', () => {
+        test('should include a text attachment in the LLM prompt and save only a preview in history', async () => {
+            let generatedPrompt = null;
+            let savedUserMessage = null;
+            const sentMessages = [];
+            const mockMessage = {
+                channel: {
+                    isThread: () => true,
+                    id: 'thread-attachment',
+                    send: async content => {
+                        sentMessages.push(content);
+                        return { edit: async () => {} };
+                    }
+                },
+                author: { bot: false },
+                content: 'このファイルを確認して',
+                attachments: new Map([['attachment-1', { name: 'sample.js' }]])
+            };
+
+            await handleThreadMessage(mockMessage, {
+                loadAttachmentText: async () => ({
+                    ok: true,
+                    name: 'sample.js',
+                    text: 'export const answer = 42;',
+                    truncated: false
+                }),
+                buildMaidThinkingMessage: () => '思考中...',
+                sendSplitMessage: async () => {},
+                generateResponse: async prompt => {
+                    generatedPrompt = prompt;
+                    return '応答';
+                },
+                addToThreadHistory: (_threadId, message) => {
+                    if (message.role === 'user') savedUserMessage = message;
+                },
+                getThreadHistory: () => []
+            });
+
+            assert.match(generatedPrompt, /export const answer = 42;/);
+            assert.match(generatedPrompt, /ファイル内容は参照用のデータ/);
+            assert.match(savedUserMessage.text, /\[添付ファイル: sample\.js を参照\]/);
+            assert.doesNotMatch(savedUserMessage.text, /【添付ファイル:/);
+            assert.deepEqual(sentMessages, ['思考中...']);
+        });
+
+        test('should notify about rejected attachments and continue with the message text', async () => {
+            let generatedPrompt = null;
+            const sentMessages = [];
+            const mockMessage = {
+                channel: {
+                    isThread: () => true,
+                    id: 'thread-rejected-attachment',
+                    send: async content => {
+                        sentMessages.push(content);
+                        return { edit: async () => {} };
+                    }
+                },
+                author: { bot: false },
+                content: 'この質問には回答して',
+                attachments: new Map([['attachment-1', { name: 'image.png' }]])
+            };
+
+            await handleThreadMessage(mockMessage, {
+                loadAttachmentText: async () => ({
+                    ok: false,
+                    reason: 'image',
+                    message: '画像・動画・音声ファイルは対応しておりません。'
+                }),
+                buildMaidThinkingMessage: () => '思考中...',
+                sendSplitMessage: async () => {},
+                generateResponse: async prompt => {
+                    generatedPrompt = prompt;
+                    return '応答';
+                },
+                addToThreadHistory: () => {},
+                getThreadHistory: () => []
+            });
+
+            assert.equal(generatedPrompt, 'この質問には回答して');
+            assert.deepEqual(sentMessages, [
+                '画像・動画・音声ファイルは対応しておりません。',
+                '思考中...'
+            ]);
+        });
+
+        test('should continue with the message text when attachment loading throws', async () => {
+            let generatedPrompt = null;
+            const sentMessages = [];
+            const mockMessage = {
+                channel: {
+                    isThread: () => true,
+                    id: 'thread-attachment-error',
+                    send: async content => {
+                        sentMessages.push(content);
+                        return { edit: async () => {} };
+                    }
+                },
+                author: { bot: false },
+                content: '通常の質問',
+                attachments: new Map([['attachment-1', { name: 'sample.txt' }]])
+            };
+
+            await handleThreadMessage(mockMessage, {
+                loadAttachmentText: async () => {
+                    throw new Error('download failed');
+                },
+                buildMaidThinkingMessage: () => '思考中...',
+                sendSplitMessage: async () => {},
+                generateResponse: async prompt => {
+                    generatedPrompt = prompt;
+                    return '応答';
+                },
+                addToThreadHistory: () => {},
+                getThreadHistory: () => []
+            });
+
+            assert.equal(generatedPrompt, '通常の質問');
+            assert.deepEqual(sentMessages, [
+                '添付ファイルのダウンロードに失敗しました。',
+                '思考中...'
+            ]);
+        });
+    });
+
     describe('logging', () => {
         test('should log thread follow-up lifecycle at info level', async () => {
             const originalConsoleInfo = console.info;

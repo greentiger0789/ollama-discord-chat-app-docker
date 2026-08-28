@@ -62,8 +62,13 @@ Run the `/o` command in Discord. If the bot creates a thread and replies, you ar
 ### `/o` command
 
 - Send a prompt via the required `prompt` option; the bot creates a thread and replies
+- Optionally attach a text file with `file` to include its contents in the answer (up to 512KB and 20,000 characters)
 - Follow-up messages inside the thread keep the conversation context
 - Long responses are automatically split into 1900-character chunks
+
+Text files, source code, and logs are supported. Images, videos, audio, PDFs, and archive files
+cannot be read. When multiple files are attached in a thread, only the first one is read.
+Do not attach secrets such as tokens, passwords, or `.env` files.
 
 When multiple people speak in a thread, Discord display names are included in the Ollama input to distinguish the conversation context. User IDs are not sent.
 
