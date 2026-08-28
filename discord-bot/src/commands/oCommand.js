@@ -1,6 +1,7 @@
 import { createLogger } from '../logger.js';
 import { buildMaidThinkingMessage, sendSplitMessage } from '../messageUtils.js';
 import { generateResponse } from '../ollamaClient.js';
+import { resolveSpeakerName } from '../speakerUtils.js';
 import { addToThreadHistory, getThreadHistory, initializeThread } from '../threadManager.js';
 import { generateThreadName } from '../threadNaming.js';
 
@@ -14,7 +15,8 @@ const defaultDeps = {
     getThreadHistory,
     addToThreadHistory,
     initializeThread,
-    generateThreadName
+    generateThreadName,
+    resolveSpeakerName
 };
 
 export function createHandleOCommand(deps = defaultDeps) {
@@ -25,7 +27,8 @@ export function createHandleOCommand(deps = defaultDeps) {
         getThreadHistory,
         addToThreadHistory,
         initializeThread,
-        generateThreadName: nameThread
+        generateThreadName: nameThread,
+        resolveSpeakerName
     } = { ...defaultDeps, ...deps };
 
     return async function handleOCommand(interaction) {
@@ -53,13 +56,14 @@ export function createHandleOCommand(deps = defaultDeps) {
 
             initializeThread(thread.id);
             const history = getThreadHistory(thread.id);
-            addToThreadHistory(thread.id, { role: 'user', text: prompt });
+            const speaker = resolveSpeakerName(interaction);
+            addToThreadHistory(thread.id, { role: 'user', text: prompt, speaker });
 
             await thread.send(`**プロンプト:** ${prompt}`);
 
             const thinkingMsg = await thread.send(buildThinking());
 
-            const responseText = await generateResponse(prompt, history);
+            const responseText = await generateResponse(prompt, history, { speaker });
 
             addToThreadHistory(thread.id, { role: 'assistant', text: responseText });
 

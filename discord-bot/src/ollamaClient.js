@@ -5,7 +5,14 @@ import { tavily } from '@tavily/core';
 import * as yaml from 'js-yaml';
 import fetch from 'node-fetch';
 import { createLogger } from './logger.js';
-import { decisionPrompt, pickSearchNotice, SUMMARY_PROMPT, SYSTEM_PROMPT } from './prompts.js';
+import {
+    decisionPrompt,
+    MULTI_USER_SYSTEM_PROMPT,
+    pickSearchNotice,
+    SUMMARY_PROMPT,
+    SYSTEM_PROMPT
+} from './prompts.js';
+import { formatEntryForLlm, isMultiUserHistory, sanitizeSpeakerName } from './speakerUtils.js';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const MODEL_CONFIG_CANDIDATES = [
@@ -60,7 +67,7 @@ export default function createOllamaClient({
 } = {}) {
     const client = httpClient;
 
-    async function generate({ model = 'qwen3.5:9b', prompt = '', history = [] } = {}) {
+    async function generate({ model = 'qwen3.5:9b', prompt = '', history = [], speaker } = {}) {
         /* =========================================
            ① トークン概算（かなり安全寄り）
         ========================================= */
@@ -70,9 +77,9 @@ export default function createOllamaClient({
             return Math.ceil(text.length / 3); // 日本語LLM向けの緩い概算
         }
 
-        function estimateTokensFromHistory(hist) {
+        function estimateTokensFromHistory(hist, multiUser) {
             return hist.reduce((sum, m) => {
-                return sum + estimateTokensFromText(m.text);
+                return sum + estimateTokensFromText(formatEntryForLlm(m, multiUser).content);
             }, 0);
         }
 
@@ -86,8 +93,12 @@ export default function createOllamaClient({
            ② 履歴が閾値を超えたら要約
         ========================================= */
 
-        const historyTokens = estimateTokensFromHistory(history);
-        const promptTokens = estimateTokensFromText(prompt);
+        const currentEntry = { role: 'user', text: prompt, speaker };
+        const multiUser = isMultiUserHistory([...history, currentEntry]);
+        const historyTokens = estimateTokensFromHistory(history, multiUser);
+        const promptTokens = estimateTokensFromText(
+            formatEntryForLlm(currentEntry, multiUser).content
+        );
 
         if (historyTokens + promptTokens > LIMIT && history.length > 1) {
             // 🔥 最新userは除外
@@ -99,7 +110,7 @@ export default function createOllamaClient({
                 limit: LIMIT
             });
 
-            const summary = await summarizeHistory(client, model, oldHistory);
+            const summary = await summarizeHistory(client, model, oldHistory, multiUser);
 
             processedHistory = [
                 {
@@ -129,17 +140,26 @@ export default function createOllamaClient({
         ========================================= */
 
         const finalMessages = [
-            { role: 'system', content: SYSTEM_PROMPT },
-            ...processedHistory.map(m => ({
-                role: m.role === 'user' ? 'user' : 'assistant',
-                content: m.text
-            })),
+            {
+                role: 'system',
+                content: multiUser
+                    ? `${SYSTEM_PROMPT}\n\n${MULTI_USER_SYSTEM_PROMPT}`
+                    : SYSTEM_PROMPT
+            },
+            ...processedHistory.map(m => formatEntryForLlm(m, multiUser)),
             {
                 role: 'user',
-                content:
-                    plan.needSearch && searchResults
-                        ? buildAugmentedPrompt(prompt, searchResults)
-                        : prompt
+                content: formatEntryForLlm(
+                    {
+                        role: 'user',
+                        text:
+                            plan.needSearch && searchResults
+                                ? buildAugmentedPrompt(prompt, searchResults)
+                                : prompt,
+                        speaker
+                    },
+                    multiUser
+                ).content
             }
         ];
 
@@ -666,11 +686,17 @@ const defaultHttpClient = createHttpClient({
     timeout: DEFAULT_REQUEST_TIMEOUT_MS
 });
 
-export async function generateResponse(prompt, history, model = OLLAMA_MODEL) {
+export async function generateResponse(prompt, history, modelOrOptions = OLLAMA_MODEL) {
+    const { model, speaker } =
+        typeof modelOrOptions === 'string'
+            ? { model: modelOrOptions }
+            : { model: modelOrOptions?.model ?? OLLAMA_MODEL, speaker: modelOrOptions?.speaker };
+
     return await defaultClient.generate({
         model,
         prompt,
-        history
+        history,
+        speaker
     });
 }
 
@@ -679,7 +705,7 @@ export async function summarizeConversation(history, model = OLLAMA_MODEL) {
     return await summarizeHistory(defaultHttpClient, model, history);
 }
 
-async function summarizeHistory(client, model, history) {
+async function summarizeHistory(client, model, history, multiUser = isMultiUserHistory(history)) {
     if (!history?.length) return null;
 
     const messages = [
@@ -689,7 +715,12 @@ async function summarizeHistory(client, model, history) {
         },
         {
             role: 'user',
-            content: history.map(m => `${m.role}: ${m.text}`).join('\n')
+            content: history
+                .map(m => {
+                    const speaker = multiUser ? sanitizeSpeakerName(m.speaker) : '';
+                    return `${m.role}${speaker ? `(${speaker})` : ''}: ${m.text}`;
+                })
+                .join('\n')
         }
     ];
 

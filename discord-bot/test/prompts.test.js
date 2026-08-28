@@ -8,6 +8,7 @@ import * as yaml from 'js-yaml';
 import { decisionPrompt as legacyDecisionPrompt } from '../src/decisionPrompt.js';
 import {
     decisionPrompt,
+    MULTI_USER_SYSTEM_PROMPT,
     pickSearchNotice,
     prompts,
     SUMMARY_PROMPT,
@@ -65,6 +66,7 @@ describe('prompt exports', () => {
         const config = loadPromptConfig();
 
         assert.equal(SYSTEM_PROMPT, config.prompts.system.trim());
+        assert.equal(MULTI_USER_SYSTEM_PROMPT, config.prompts.multiUserSystem.trim());
         assert.equal(decisionPrompt, config.prompts.decision.trim());
         assert.deepEqual(
             searchNotices,
@@ -75,6 +77,7 @@ describe('prompt exports', () => {
     test('should expose grouped prompts', () => {
         assert.deepEqual(prompts, {
             system: SYSTEM_PROMPT,
+            multiUserSystem: MULTI_USER_SYSTEM_PROMPT,
             decision: decisionPrompt,
             searchNotices,
             summary: SUMMARY_PROMPT,
