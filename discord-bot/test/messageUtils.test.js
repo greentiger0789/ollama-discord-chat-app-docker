@@ -1,7 +1,52 @@
 import assert from 'node:assert/strict';
 import test, { describe } from 'node:test';
 
-import { buildMaidThinkingMessage, sendSplitMessage } from '../src/messageUtils.js';
+import {
+    buildMaidThinkingMessage,
+    formatQuotedReference,
+    REFERENCE_QUOTE_MAX_LENGTH,
+    sendSplitMessage
+} from '../src/messageUtils.js';
+
+describe('formatQuotedReference', () => {
+    test('formats a user message as a quoted reference', () => {
+        const formatted = formatQuotedReference({
+            author: { bot: false },
+            content: '参照元の内容'
+        });
+
+        assert.equal(formatted, '（返信元のユーザーメッセージ）\n> 参照元の内容');
+    });
+
+    test('identifies a bot message as an assistant message', () => {
+        const formatted = formatQuotedReference({
+            author: { bot: true },
+            content: '参照元の応答'
+        });
+
+        assert.equal(formatted, '（返信元のアシスタントメッセージ）\n> 参照元の応答');
+    });
+
+    test('quotes every line in a multiline message', () => {
+        const formatted = formatQuotedReference({ content: '1行目\n2行目\n3行目' });
+
+        assert.equal(formatted, '（返信元のユーザーメッセージ）\n> 1行目\n> 2行目\n> 3行目');
+    });
+
+    test('truncates content longer than the reference quote limit', () => {
+        const formatted = formatQuotedReference({
+            content: 'a'.repeat(REFERENCE_QUOTE_MAX_LENGTH + 1)
+        });
+
+        assert.equal(formatted, `（返信元のユーザーメッセージ）\n> ${'a'.repeat(500)}…`);
+    });
+
+    test('formats empty content without throwing', () => {
+        const formatted = formatQuotedReference({ content: '' });
+
+        assert.equal(formatted, '（返信元のユーザーメッセージ）\n> ');
+    });
+});
 
 /* ================================
    buildMaidThinkingMessage テスト

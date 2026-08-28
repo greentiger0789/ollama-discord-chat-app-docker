@@ -6,6 +6,10 @@ import * as threadManager from '../threadManager.js';
 const logger = createLogger('threadMessageHandler');
 const threadQueues = new Map();
 
+async function defaultFetchReferencedMessage(message) {
+    return await message.fetchReference();
+}
+
 export async function handleThreadMessage(message, deps = {}) {
     if (!message.channel.isThread()) return;
     if (message.author.bot) return;
@@ -36,7 +40,8 @@ async function processThreadMessage(message, deps = {}) {
         sendSplitMessage = messageUtils.sendSplitMessage,
         generateResponse = ollamaClient.generateResponse,
         addToThreadHistory = threadManager.addToThreadHistory,
-        getThreadHistory = threadManager.getThreadHistory
+        getThreadHistory = threadManager.getThreadHistory,
+        fetchReferencedMessage = defaultFetchReferencedMessage
     } = deps;
 
     const threadId = message.channel.id;
@@ -47,15 +52,32 @@ async function processThreadMessage(message, deps = {}) {
         messageLength: message.content?.length || 0
     });
 
+    let replyContext = '';
+    if (message.reference?.messageId) {
+        try {
+            const referencedMessage = await fetchReferencedMessage(message);
+            if (referencedMessage?.content) {
+                replyContext = messageUtils.formatQuotedReference(referencedMessage);
+            }
+        } catch (err) {
+            logger.warn('Failed to resolve referenced message', err, {
+                threadId,
+                referenceId: message.reference.messageId
+            });
+        }
+    }
+
+    const composedText = replyContext ? `${replyContext}\n${message.content}` : message.content;
+
     addToThreadHistory(threadId, {
         role: 'user',
-        text: message.content
+        text: composedText
     });
 
     try {
         const thinkingMsg = await message.channel.send(buildMaidThinkingMessage());
 
-        const responseText = await generateResponse(message.content, history);
+        const responseText = await generateResponse(composedText, history);
 
         addToThreadHistory(threadId, {
             role: 'assistant',
