@@ -2,6 +2,19 @@ function getRandom(arr) {
     return arr[Math.floor(Math.random() * arr.length)];
 }
 
+export const REFERENCE_QUOTE_MAX_LENGTH = 500;
+
+export function formatQuotedReference(refMessage) {
+    const speaker = refMessage.author?.bot ? 'アシスタント' : 'ユーザー';
+    let text = refMessage.content || '';
+
+    if (text.length > REFERENCE_QUOTE_MAX_LENGTH) {
+        text = `${text.slice(0, REFERENCE_QUOTE_MAX_LENGTH)}…`;
+    }
+
+    return `（返信元の${speaker}メッセージ）\n> ${text.replaceAll('\n', '\n> ')}`;
+}
+
 export function buildMaidThinkingMessage() {
     const emojis = ['☕', '🫖', '🧠', '📡', '🔎', '⚙️', '💭', '📚', '✨', '💻'];
 
