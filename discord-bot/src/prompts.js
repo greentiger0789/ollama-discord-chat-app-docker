@@ -24,6 +24,7 @@ function loadPrompts() {
 
     return {
         system: requirePrompt(prompts, 'system', promptConfigPath),
+        multiUserSystem: requirePrompt(prompts, 'multiUserSystem', promptConfigPath),
         decision: requirePrompt(prompts, 'decision', promptConfigPath),
         searchNotices: requirePromptList(prompts, 'searchNotices', promptConfigPath),
         summary: optionalPrompt(prompts, 'summary'),
@@ -71,6 +72,7 @@ function requirePromptList(prompts, key, promptConfigPath) {
 const prompts = loadPrompts();
 
 export const SYSTEM_PROMPT = prompts.system;
+export const MULTI_USER_SYSTEM_PROMPT = prompts.multiUserSystem;
 export const decisionPrompt = prompts.decision;
 export const searchNotices = prompts.searchNotices;
 // 任意プロンプト（未設定の場合は ollamaClient.js 側のデフォルトにフォールバック）

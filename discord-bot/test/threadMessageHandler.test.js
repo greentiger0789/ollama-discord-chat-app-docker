@@ -232,7 +232,7 @@ describe('threadMessageHandler', () => {
             assert.equal(capturedThreadId, 'thread-456', 'Should pass correct thread ID');
             assert.deepEqual(
                 capturedUserMessage,
-                { role: 'user', text: 'ユーザーメッセージ' },
+                { role: 'user', text: 'ユーザーメッセージ', speaker: 'ユーザー' },
                 'Should add user message to history'
             );
             assert.deepEqual(
@@ -240,6 +240,41 @@ describe('threadMessageHandler', () => {
                 { role: 'assistant', text: 'アシスタント応答' },
                 'Should add assistant message to history'
             );
+        });
+
+        test('should resolve and pass the current speaker to the response generator', async () => {
+            let capturedSpeaker = null;
+            let persistedUserMessage = null;
+            const mockMessage = {
+                channel: {
+                    isThread: () => true,
+                    id: 'thread-speaker',
+                    send: async () => ({ edit: async () => {} })
+                },
+                author: { bot: false },
+                content: '発言者の確認'
+            };
+
+            await handleThreadMessage(mockMessage, {
+                buildMaidThinkingMessage: () => '🧹 考え中...',
+                sendSplitMessage: async () => {},
+                generateResponse: async (_content, _history, options) => {
+                    capturedSpeaker = options.speaker;
+                    return '応答';
+                },
+                addToThreadHistory: (_threadId, entry) => {
+                    if (entry.role === 'user') persistedUserMessage = entry;
+                },
+                getThreadHistory: () => [],
+                resolveSpeakerName: () => '注入した名前'
+            });
+
+            assert.equal(capturedSpeaker, '注入した名前');
+            assert.deepEqual(persistedUserMessage, {
+                role: 'user',
+                text: '発言者の確認',
+                speaker: '注入した名前'
+            });
         });
     });
 
@@ -431,7 +466,7 @@ describe('threadMessageHandler', () => {
             assert.equal(addedMessages.length, 2, 'Should add two messages to history');
             assert.deepEqual(
                 addedMessages[0],
-                { role: 'user', text: '順序テスト' },
+                { role: 'user', text: '順序テスト', speaker: 'ユーザー' },
                 'First message should be user message'
             );
             assert.deepEqual(
@@ -484,7 +519,7 @@ describe('threadMessageHandler', () => {
             assert.deepEqual(threadManager.getThreadHistory(threadId), [
                 { role: 'user', text: '以前のメッセージ' },
                 { role: 'assistant', text: '以前の応答' },
-                { role: 'user', text: '新しいメッセージ' },
+                { role: 'user', text: '新しいメッセージ', speaker: 'ユーザー' },
                 { role: 'assistant', text: '新しい応答' }
             ]);
         });
@@ -554,15 +589,15 @@ describe('threadMessageHandler', () => {
                 {
                     content: 'second',
                     history: [
-                        { role: 'user', text: 'first' },
+                        { role: 'user', text: 'first', speaker: 'ユーザー' },
                         { role: 'assistant', text: 'first-response' }
                     ]
                 }
             ]);
             assert.deepEqual(threadManager.getThreadHistory(threadId), [
-                { role: 'user', text: 'first' },
+                { role: 'user', text: 'first', speaker: 'ユーザー' },
                 { role: 'assistant', text: 'first-response' },
-                { role: 'user', text: 'second' },
+                { role: 'user', text: 'second', speaker: 'ユーザー' },
                 { role: 'assistant', text: 'second-response' }
             ]);
         });

@@ -61,7 +61,7 @@ describe('threadMessageHandler reply references', () => {
         assert.equal(fetchCalled, false);
         assert.equal(generatedPrompt, '通常の発言');
         assert.deepEqual(addedMessages, [
-            { role: 'user', text: '通常の発言' },
+            { role: 'user', text: '通常の発言', speaker: 'ユーザー' },
             { role: 'assistant', text: 'アシスタント応答' }
         ]);
     });
@@ -94,7 +94,7 @@ describe('threadMessageHandler reply references', () => {
         assert.equal(fetchedMessage, message);
         assert.equal(generatedPrompt, expectedPrompt);
         assert.deepEqual(addedMessages, [
-            { role: 'user', text: expectedPrompt },
+            { role: 'user', text: expectedPrompt, speaker: 'ユーザー' },
             { role: 'assistant', text: '詳しい回答' }
         ]);
     });

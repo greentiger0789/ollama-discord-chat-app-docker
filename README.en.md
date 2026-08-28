@@ -9,6 +9,7 @@ A Discord bot powered by Ollama. It provides Q&A, web search, and per-thread con
 - **Ollama integration**: Leverages local LLMs (NVIDIA GPU support) as well as cloud models
 - **Slash command**: Ask with the `/o` command and the bot replies in a created thread
 - **Conversation history**: Keeps history per thread and automatically summarizes it when it grows long
+- **Multi-user conversations**: Distinguishes participants and prioritizes the most recent speaker
 - **Web search**: Real-time search via Tavily (falls back to DuckDuckGo on failure)
 - **Hot-reload development**: Automatically restarts on changes to source, config, or `.env`
 - **Open WebUI**: Optional web UI
@@ -63,6 +64,8 @@ Run the `/o` command in Discord. If the bot creates a thread and replies, you ar
 - Send a prompt via the required `prompt` option; the bot creates a thread and replies
 - Follow-up messages inside the thread keep the conversation context
 - Long responses are automatically split into 1900-character chunks
+
+When multiple people speak in a thread, Discord display names are included in the Ollama input to distinguish the conversation context. User IDs are not sent.
 
 ### Open WebUI
 

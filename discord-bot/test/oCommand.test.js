@@ -118,6 +118,7 @@ describe('oCommand', () => {
         test('should pass only prior history to generateResponse and persist the full exchange', async () => {
             const threadManager = await importFreshThreadManager();
             let capturedHistory = null;
+            let capturedOptions = null;
 
             const thread = {
                 id: 'thread-history-1',
@@ -134,8 +135,9 @@ describe('oCommand', () => {
             };
 
             const mockHandleOCommand = createHandleOCommand({
-                generateResponse: async (_prompt, history) => {
+                generateResponse: async (_prompt, history, options) => {
                     capturedHistory = history;
+                    capturedOptions = options;
                     return 'テスト応答';
                 },
                 getThreadHistory: threadManager.getThreadHistory,
@@ -149,9 +151,10 @@ describe('oCommand', () => {
 
             assert.deepEqual(capturedHistory, []);
             assert.deepEqual(threadManager.getThreadHistory(thread.id), [
-                { role: 'user', text: '初回プロンプト' },
+                { role: 'user', text: '初回プロンプト', speaker: 'testuser' },
                 { role: 'assistant', text: 'テスト応答' }
             ]);
+            assert.deepEqual(capturedOptions, { speaker: 'testuser' });
         });
     });
 

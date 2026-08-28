@@ -1,6 +1,7 @@
 import { createLogger } from '../logger.js';
 import * as messageUtils from '../messageUtils.js';
 import * as ollamaClient from '../ollamaClient.js';
+import { resolveSpeakerName as defaultResolveSpeakerName } from '../speakerUtils.js';
 import * as threadManager from '../threadManager.js';
 
 const logger = createLogger('threadMessageHandler');
@@ -41,6 +42,7 @@ async function processThreadMessage(message, deps = {}) {
         generateResponse = ollamaClient.generateResponse,
         addToThreadHistory = threadManager.addToThreadHistory,
         getThreadHistory = threadManager.getThreadHistory,
+        resolveSpeakerName = defaultResolveSpeakerName,
         fetchReferencedMessage = defaultFetchReferencedMessage
     } = deps;
 
@@ -68,16 +70,18 @@ async function processThreadMessage(message, deps = {}) {
     }
 
     const composedText = replyContext ? `${replyContext}\n${message.content}` : message.content;
+    const speaker = resolveSpeakerName(message);
 
     addToThreadHistory(threadId, {
         role: 'user',
-        text: composedText
+        text: composedText,
+        speaker
     });
 
     try {
         const thinkingMsg = await message.channel.send(buildMaidThinkingMessage());
 
-        const responseText = await generateResponse(composedText, history);
+        const responseText = await generateResponse(composedText, history, { speaker });
 
         addToThreadHistory(threadId, {
             role: 'assistant',

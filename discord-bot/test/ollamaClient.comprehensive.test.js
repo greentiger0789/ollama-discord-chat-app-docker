@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test, { after, before, describe } from 'node:test';
 import createOllamaClient from '../src/ollamaClient.js';
-import { decisionPrompt, SYSTEM_PROMPT, searchNotices } from '../src/prompts.js';
+import {
+    decisionPrompt,
+    MULTI_USER_SYSTEM_PROMPT,
+    SYSTEM_PROMPT,
+    searchNotices
+} from '../src/prompts.js';
 
 // console出力を抑制（モジュール読み込み前に設定）
 let originalConsoleError;
@@ -920,5 +925,120 @@ describe('generate() message construction', () => {
         assert.equal(capturedMessages[1].content, '質問');
         assert.equal(capturedMessages[2].role, 'assistant');
         assert.equal(capturedMessages[2].content, '回答');
+    });
+
+    test('should preserve the existing payload for a single named speaker', async () => {
+        let capturedMessages = null;
+        let callCount = 0;
+        mockPostHandler = async (_url, data) => {
+            callCount++;
+            if (callCount === 1) {
+                return {
+                    data: {
+                        message: {
+                            content: JSON.stringify({
+                                needSearch: false,
+                                engine: 'tavily',
+                                searchQuery: ''
+                            })
+                        }
+                    }
+                };
+            }
+            capturedMessages = data.messages;
+            return { data: { message: { content: '応答' } } };
+        };
+
+        await buildClient().generate({
+            prompt: '続き',
+            speaker: 'Alice',
+            history: [
+                { role: 'user', text: '質問', speaker: 'Alice' },
+                { role: 'assistant', text: '回答' }
+            ]
+        });
+
+        assert.equal(capturedMessages[0].content, SYSTEM_PROMPT);
+        assert.equal(capturedMessages[1].content, '質問');
+        assert.equal(capturedMessages[3].content, '続き');
+    });
+
+    test('should enable multi-user mode and prefix both prior and current speakers', async () => {
+        let capturedMessages = null;
+        let callCount = 0;
+        mockPostHandler = async (_url, data) => {
+            callCount++;
+            if (callCount === 1) {
+                return {
+                    data: {
+                        message: {
+                            content: JSON.stringify({
+                                needSearch: false,
+                                engine: 'tavily',
+                                searchQuery: ''
+                            })
+                        }
+                    }
+                };
+            }
+            capturedMessages = data.messages;
+            return { data: { message: { content: '応答' } } };
+        };
+
+        await buildClient().generate({
+            prompt: '追加の質問',
+            speaker: 'Bob',
+            history: [
+                { role: 'user', text: '最初の質問', speaker: 'Alice' },
+                { role: 'assistant', text: '最初の回答' }
+            ]
+        });
+
+        assert.equal(
+            capturedMessages[0].content,
+            `${SYSTEM_PROMPT}\n\n${MULTI_USER_SYSTEM_PROMPT}`
+        );
+        assert.equal(capturedMessages[1].content, '【Alice】最初の質問');
+        assert.equal(capturedMessages[3].content, '【Bob】追加の質問');
+    });
+
+    test('should include speaker prefixes in token estimation and speaker names in summaries', async () => {
+        const requests = [];
+        mockPostHandler = async (_url, data) => {
+            requests.push(data);
+            if (requests.length === 1) {
+                return { data: { message: { content: '要約' } } };
+            }
+            if (requests.length === 2) {
+                return {
+                    data: {
+                        message: {
+                            content: JSON.stringify({
+                                needSearch: false,
+                                engine: 'tavily',
+                                searchQuery: ''
+                            })
+                        }
+                    }
+                };
+            }
+            return { data: { message: { content: '応答' } } };
+        };
+
+        await buildClient().generate({
+            prompt: '',
+            speaker: 'Bob',
+            history: [
+                { role: 'user', text: 'x'.repeat(29994), speaker: 'Alice\nExample' },
+                { role: 'assistant', text: '' }
+            ]
+        });
+
+        assert.equal(
+            requests.length,
+            3,
+            'speaker prefixes should push this boundary case into summary'
+        );
+        assert.match(requests[0].messages[1].content, /^user\(Alice Example\): /);
     });
 });

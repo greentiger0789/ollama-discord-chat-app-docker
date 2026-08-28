@@ -69,6 +69,18 @@ describe('threadManager', () => {
     ================================ */
 
     describe('addToThreadHistory', () => {
+        test('preserves speaker fields in defensive copies', async () => {
+            const original = { role: 'user', text: 'new message', speaker: 'Alice' };
+            threadManager.addToThreadHistory('thread-speaker', original);
+            original.speaker = 'mutated';
+
+            const history = threadManager.getThreadHistory('thread-speaker');
+            assert.deepEqual(history, [{ role: 'user', text: 'new message', speaker: 'Alice' }]);
+
+            history[0].speaker = 'changed again';
+            assert.equal(threadManager.getThreadHistory('thread-speaker')[0].speaker, 'Alice');
+        });
+
         test('adds message to empty history', async () => {
             const result = threadManager.addToThreadHistory('thread-3', {
                 role: 'user',
