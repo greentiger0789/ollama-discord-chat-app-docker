@@ -18,6 +18,38 @@ function createDeferred() {
     return { promise, resolve, reject };
 }
 
+let nextAddressingThreadId = 1;
+
+function createAddressingMessage({ threadId, mentions, reference, attachments, client } = {}) {
+    return {
+        channel: {
+            id: threadId ?? `thread-addressing-${nextAddressingThreadId++}`,
+            isThread: () => true,
+            send: async () => ({ edit: async () => {} })
+        },
+        author: { bot: false, id: 'author-1' },
+        content: '宛先を含むメッセージ',
+        mentions,
+        reference,
+        attachments,
+        client
+    };
+}
+
+function createSuccessfulDeps(overrides = {}) {
+    return {
+        buildMaidThinkingMessage: () => '考え中…',
+        sendSplitMessage: async () => {},
+        generateResponse: async () => '応答',
+        addToThreadHistory: () => {},
+        getThreadHistory: () => [],
+        registerGeneration: (_threadId, entry) => ({ ...entry, state: 'generating' }),
+        completeGeneration: () => {},
+        clearCompletedGeneration: () => {},
+        ...overrides
+    };
+}
+
 describe('threadMessageHandler', () => {
     let originalConsoleError;
 
@@ -335,6 +367,199 @@ describe('threadMessageHandler', () => {
                 text: '発言者の確認',
                 speaker: '注入した名前'
             });
+        });
+    });
+
+    describe('addressed recipient filtering', () => {
+        test('should ignore a direct mention of another human before any side effect', async () => {
+            const calls = [];
+            const message = createAddressingMessage({
+                mentions: {
+                    users: new Map([['human-2', { id: 'human-2', bot: false }]])
+                },
+                attachments: new Map([['attachment-1', { name: 'secret.txt' }]])
+            });
+            message.channel.send = async () => calls.push('channel.send');
+
+            await handleThreadMessage(message, {
+                clientId: 'maid-1',
+                clearCompletedGeneration: () => calls.push('clearCompletedGeneration'),
+                getThreadHistory: () => calls.push('getThreadHistory'),
+                addToThreadHistory: () => calls.push('addToThreadHistory'),
+                loadAttachmentText: async () => calls.push('loadAttachmentText'),
+                buildMaidThinkingMessage: () => calls.push('buildMaidThinkingMessage'),
+                generateResponse: async () => calls.push('generateResponse'),
+                sendSplitMessage: async () => calls.push('sendSplitMessage'),
+                registerGeneration: () => calls.push('registerGeneration')
+            });
+
+            assert.deepEqual(calls, []);
+        });
+
+        test('should ignore a reply to another human with or without a direct mention', async () => {
+            for (const [caseName, users] of [
+                ['without-notification', new Map()],
+                ['with-notification', new Map([['human-2', { id: 'human-2', bot: false }]])]
+            ]) {
+                const calls = [];
+                const message = createAddressingMessage({
+                    threadId: `thread-reply-${caseName}`,
+                    reference: { messageId: `reference-${caseName}` },
+                    mentions: {
+                        users,
+                        repliedUser: { id: 'human-2', bot: false }
+                    }
+                });
+
+                await handleThreadMessage(
+                    message,
+                    createSuccessfulDeps({
+                        clientId: 'maid-1',
+                        clearCompletedGeneration: () => calls.push('clearCompletedGeneration'),
+                        fetchReferencedMessage: async () => calls.push('fetchReferencedMessage'),
+                        generateResponse: async () => calls.push('generateResponse')
+                    })
+                );
+
+                assert.deepEqual(calls, [], caseName);
+            }
+        });
+
+        test('should process a direct mention of Maid-chan', async () => {
+            let generated = false;
+            await handleThreadMessage(
+                createAddressingMessage({
+                    mentions: {
+                        users: new Map([['maid-1', { id: 'maid-1', bot: true }]])
+                    }
+                }),
+                createSuccessfulDeps({
+                    clientId: 'maid-1',
+                    generateResponse: async () => {
+                        generated = true;
+                        return '応答';
+                    }
+                })
+            );
+
+            assert.equal(generated, true);
+        });
+
+        test('should ignore a mixed mention of Maid-chan and another human', async () => {
+            let cleared = false;
+            await handleThreadMessage(
+                createAddressingMessage({
+                    mentions: {
+                        users: new Map([
+                            ['maid-1', { id: 'maid-1', bot: true }],
+                            ['human-2', { id: 'human-2', bot: false }]
+                        ])
+                    }
+                }),
+                createSuccessfulDeps({
+                    clientId: 'maid-1',
+                    clearCompletedGeneration: () => {
+                        cleared = true;
+                    }
+                })
+            );
+
+            assert.equal(cleared, false);
+        });
+
+        test('should process direct mentions of and replies to another bot', async () => {
+            let generatedCount = 0;
+            const deps = createSuccessfulDeps({
+                clientId: 'maid-1',
+                fetchReferencedMessage: async () => ({
+                    author: { bot: true },
+                    content: '他の Bot の投稿'
+                }),
+                generateResponse: async () => {
+                    generatedCount += 1;
+                    return '応答';
+                }
+            });
+
+            await handleThreadMessage(
+                createAddressingMessage({
+                    mentions: {
+                        users: new Map([['bot-2', { id: 'bot-2', bot: true }]])
+                    }
+                }),
+                deps
+            );
+            await handleThreadMessage(
+                createAddressingMessage({
+                    reference: { messageId: 'reference-bot-2' },
+                    mentions: {
+                        users: new Map(),
+                        repliedUser: { id: 'bot-2', bot: true }
+                    }
+                }),
+                deps
+            );
+
+            assert.equal(generatedCount, 2);
+        });
+
+        test('should preserve existing behavior when clientId cannot be resolved', async () => {
+            let generated = false;
+            await handleThreadMessage(
+                createAddressingMessage({
+                    mentions: {
+                        users: new Map([['human-2', { id: 'human-2', bot: false }]])
+                    }
+                }),
+                createSuccessfulDeps({
+                    generateResponse: async () => {
+                        generated = true;
+                        return '応答';
+                    }
+                })
+            );
+
+            assert.equal(generated, true);
+        });
+
+        test('should resolve clientId from the message client', async () => {
+            let cleared = false;
+            await handleThreadMessage(
+                createAddressingMessage({
+                    client: { user: { id: 'maid-1' } },
+                    mentions: {
+                        users: new Map([['human-2', { id: 'human-2', bot: false }]])
+                    }
+                }),
+                createSuccessfulDeps({
+                    clearCompletedGeneration: () => {
+                        cleared = true;
+                    }
+                })
+            );
+
+            assert.equal(cleared, false);
+        });
+
+        test('should process messages with missing mention data or only non-user mentions', async () => {
+            let generatedCount = 0;
+            const deps = createSuccessfulDeps({
+                clientId: 'maid-1',
+                generateResponse: async () => {
+                    generatedCount += 1;
+                    return '応答';
+                }
+            });
+
+            await handleThreadMessage(createAddressingMessage(), deps);
+            await handleThreadMessage(
+                createAddressingMessage({
+                    mentions: { users: new Map(), roles: new Map(), everyone: true }
+                }),
+                deps
+            );
+
+            assert.equal(generatedCount, 2);
         });
     });
 

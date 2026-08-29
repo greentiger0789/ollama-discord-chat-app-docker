@@ -22,9 +22,28 @@ async function defaultFetchReferencedMessage(message) {
     return await message.fetchReference();
 }
 
+function isAddressedToOtherHuman(message, clientId) {
+    if (!clientId) return false;
+
+    const isOtherHuman = user => user?.id !== clientId && user?.bot === false;
+    if (isOtherHuman(message.mentions?.repliedUser)) return true;
+
+    const mentionedUsers = message.mentions?.users;
+    if (typeof mentionedUsers?.values !== 'function') return false;
+
+    for (const user of mentionedUsers.values()) {
+        if (isOtherHuman(user)) return true;
+    }
+
+    return false;
+}
+
 export async function handleThreadMessage(message, deps = {}) {
     if (!message.channel.isThread()) return;
     if (message.author.bot) return;
+
+    const clientId = deps.clientId ?? message.client?.user?.id;
+    if (isAddressedToOtherHuman(message, clientId)) return;
 
     const threadId = message.channel.id;
     const { clearCompletedGeneration = defaultClearCompletedGeneration } = deps;

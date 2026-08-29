@@ -3,7 +3,7 @@ import test, { after, before, describe } from 'node:test';
 
 import { handleThreadMessage } from '../src/handlers/threadMessageHandler.js';
 
-function createMessage({ content = '返信内容', reference } = {}) {
+function createMessage({ content = '返信内容', reference, mentions } = {}) {
     return {
         channel: {
             isThread: () => true,
@@ -12,7 +12,8 @@ function createMessage({ content = '返信内容', reference } = {}) {
         },
         author: { bot: false },
         content,
-        reference
+        reference,
+        mentions
     };
 }
 
@@ -66,47 +67,59 @@ describe('threadMessageHandler reply references', () => {
         ]);
     });
 
-    test('adds a referenced user message to the prompt and user history entry', async () => {
-        let fetchedMessage;
-        let generatedPrompt;
+    test('ignores a reply to another user without resolving the reference', async () => {
+        let fetchCalled = false;
+        let generateCalled = false;
+        let clearCalled = false;
         const addedMessages = [];
         const message = createMessage({
             content: 'この部分を詳しく',
-            reference: { messageId: 'reference-user' }
+            reference: { messageId: 'reference-user' },
+            mentions: {
+                users: new Map(),
+                repliedUser: { id: 'other-user', bot: false }
+            }
         });
 
         await handleThreadMessage(
             message,
             createDeps({
-                fetchReferencedMessage: async receivedMessage => {
-                    fetchedMessage = receivedMessage;
-                    return { author: { bot: false }, content: '以前の説明' };
+                clientId: 'maid-1',
+                clearCompletedGeneration: () => {
+                    clearCalled = true;
                 },
-                generateResponse: async prompt => {
-                    generatedPrompt = prompt;
+                fetchReferencedMessage: async () => {
+                    fetchCalled = true;
+                },
+                generateResponse: async () => {
+                    generateCalled = true;
                     return '詳しい回答';
                 },
                 addToThreadHistory: (_threadId, entry) => addedMessages.push(entry)
             })
         );
 
-        const expectedPrompt = '（返信元のユーザーメッセージ）\n> 以前の説明\nこの部分を詳しく';
-        assert.equal(fetchedMessage, message);
-        assert.equal(generatedPrompt, expectedPrompt);
-        assert.deepEqual(addedMessages, [
-            { role: 'user', text: expectedPrompt, speaker: 'ユーザー' },
-            { role: 'assistant', text: '詳しい回答' }
-        ]);
+        assert.equal(clearCalled, false);
+        assert.equal(fetchCalled, false);
+        assert.equal(generateCalled, false);
+        assert.deepEqual(addedMessages, []);
     });
 
     test('includes a referenced assistant message', async () => {
         let generatedPrompt;
 
         await handleThreadMessage(
-            createMessage({ reference: { messageId: 'reference-assistant' } }),
+            createMessage({
+                reference: { messageId: 'reference-assistant' },
+                mentions: {
+                    users: new Map(),
+                    repliedUser: { id: 'maid-1', bot: true }
+                }
+            }),
             createDeps({
+                clientId: 'maid-1',
                 fetchReferencedMessage: async () => ({
-                    author: { bot: true },
+                    author: { bot: true, id: 'maid-1' },
                     content: 'メイドちゃんの回答'
                 }),
                 generateResponse: async prompt => {

@@ -49,7 +49,7 @@ client.on('interactionCreate', async interaction => {
 
 client.on('messageCreate', async message => {
     if (message.channel.isThread()) {
-        await handleThreadMessage(message);
+        await handleThreadMessage(message, { clientId: client.user?.id });
         return;
     }
 
