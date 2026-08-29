@@ -1,12 +1,11 @@
-FROM node:26-slim
+FROM node:26-alpine
 
 WORKDIR /app
 
-# ベースイメージの OS パッケージを最新化（util-linux 等の既知 CVE 対策）
-RUN apt-get update \
-    && apt-get upgrade --yes \
-    && apt-get install --yes --no-install-recommends make \
-    && rm -rf /var/lib/apt/lists/*
+# 最新のセキュリティ修正を取り込むため、make のバージョンは固定しない
+# hadolint ignore=DL3018
+RUN apk upgrade --no-cache \
+    && apk add --no-cache make
 
 # 同梱 npm を最新化し、npm 内部の脆弱パッケージを修正版で上書き
 # （npm@latest だけでは内部依存は更新されないため、修正版を手動で展開する）
