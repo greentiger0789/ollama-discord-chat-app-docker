@@ -54,10 +54,7 @@ export async function isManagedThread(
     const pending = pendingClassifications.get(threadId);
     if (pending) return await pending;
 
-    const classification = classifyThreadFromStarterMessage(
-        { ...channel, id: threadId },
-        resolvedClientId
-    );
+    const classification = classifyThreadFromStarterMessage(channel, threadId, resolvedClientId);
     pendingClassifications.set(threadId, classification);
 
     try {
@@ -70,10 +67,10 @@ export async function isManagedThread(
 }
 
 async function classifyThreadFromStarterMessage(
-    channel: ManagedThreadChannel & { id: string },
+    channel: ManagedThreadChannel,
+    threadId: string,
     clientId: string
 ): Promise<boolean> {
-    const threadId = channel.id;
     if (typeof channel.fetchStarterMessage !== 'function') {
         unmanagedThreadIds.add(threadId);
         return false;

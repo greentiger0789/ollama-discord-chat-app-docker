@@ -38,6 +38,20 @@ function createThread({
     return { channel, getFetchCount: () => fetchCount };
 }
 
+class PrototypeThreadChannel {
+    readonly id = 'prototype-restored-thread';
+    readonly ownerId = CLIENT_ID;
+    fetchCount = 0;
+
+    async fetchStarterMessage() {
+        this.fetchCount++;
+        return {
+            author: { id: CLIENT_ID },
+            content: MANAGED_THREAD_STARTER_CONTENT
+        };
+    }
+}
+
 describe('managedThreadRegistry', () => {
     test('accepts explicitly registered /o threads without fetching Discord state', async () => {
         const threadId = 'registered-thread';
@@ -67,6 +81,16 @@ describe('managedThreadRegistry', () => {
         assert.equal(await isManagedThread(channel, { clientId: CLIENT_ID }), true);
         assert.equal(isRegisteredManagedThread(channel.id), true);
         assert.equal(getFetchCount(), 1);
+    });
+
+    test('restores a managed thread when fetchStarterMessage is a prototype method', async () => {
+        const channel = new PrototypeThreadChannel();
+        assert.equal(Object.hasOwn(channel, 'fetchStarterMessage'), false);
+
+        assert.equal(await isManagedThread(channel, { clientId: CLIENT_ID }), true);
+        assert.equal(await isManagedThread(channel, { clientId: CLIENT_ID }), true);
+        assert.equal(isRegisteredManagedThread(channel.id), true);
+        assert.equal(channel.fetchCount, 1);
     });
 
     test('coalesces concurrent starter-message checks for the same thread', async () => {
