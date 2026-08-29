@@ -28,6 +28,11 @@ const DDG_SEARCH_FAILED_MESSAGE = 'DuckDuckGo検索に失敗しました。';
 const SEARCH_STATUS_SUCCESS = 'success';
 const SEARCH_STATUS_NO_RESULTS = 'no_results';
 const SEARCH_STATUS_ERROR = 'error';
+const EXPLICIT_WEB_SEARCH_PATTERNS = [
+    /(?:web|ウェブ|ネット|インターネット)(?:上)?(?:で|を|から)?[^。！？\n]{0,20}(?:検索|調べ|調査|確認|探)/iu,
+    /(?:ググ|googleで|duckduckgoで)(?:って|検索|調べ|調査|確認|探)/iu,
+    /(?:出典|情報源|外部ソース)(?:を|も)?[^。！？\n]{0,12}(?:検索|調べ|確認|探|提示)/u
+];
 const logger = createLogger('ollamaClient');
 let MODEL_CONFIG = {};
 
@@ -237,7 +242,12 @@ async function decideSearchPlan(client, model, prompt, { signal } = {}) {
         'リアルタイム'
     ];
 
-    const hasForceKeyword = forceKeywords.some(k => prompt.includes(k));
+    const hasFreshnessKeyword = forceKeywords.some(k => prompt.includes(k));
+    // 明示的なWeb検索依頼は、判定モデルが静的知識だと誤認しても尊重する。
+    const hasExplicitWebSearchRequest = EXPLICIT_WEB_SEARCH_PATTERNS.some(pattern =>
+        pattern.test(prompt)
+    );
+    const hasForceKeyword = hasFreshnessKeyword || hasExplicitWebSearchRequest;
 
     try {
         const res = await postChat(
@@ -271,6 +281,7 @@ async function decideSearchPlan(client, model, prompt, { signal } = {}) {
             needSearch: plan.needSearch,
             engine: plan.engine,
             forcedByKeyword: hasForceKeyword,
+            explicitSearchRequest: hasExplicitWebSearchRequest,
             query: summarizeQuery(plan.searchQuery)
         });
         return plan;
@@ -288,6 +299,7 @@ async function decideSearchPlan(client, model, prompt, { signal } = {}) {
             needSearch: fallbackPlan.needSearch,
             engine: fallbackPlan.engine,
             forcedByKeyword: hasForceKeyword,
+            explicitSearchRequest: hasExplicitWebSearchRequest,
             query: summarizeQuery(fallbackPlan.searchQuery)
         });
         return fallbackPlan;

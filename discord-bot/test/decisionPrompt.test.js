@@ -20,6 +20,19 @@ describe('decisionPrompt', () => {
         assert.ok(hasSearchKeywords, 'Should contain search-related keywords');
     });
 
+    test('should prioritize explicit web search requests', () => {
+        assert.match(decisionPrompt, /明示的に依頼/);
+        assert.match(decisionPrompt, /必ず needSearch を true/);
+    });
+
+    test('should cover key decision boundaries with generic examples', () => {
+        assert.match(decisionPrompt, /〈作品名〉 〈登場人物名〉 一人称/);
+        assert.match(decisionPrompt, /〈新製品名〉 仕様 旧モデル 比較 発表/);
+        assert.match(decisionPrompt, /〈専門用語〉 提唱者 初出/);
+        assert.match(decisionPrompt, /富士山の高さ/);
+        assert.match(decisionPrompt, /文章を敬語に直して/);
+    });
+
     test('should mention tavily engine', () => {
         assert.ok(
             decisionPrompt.includes('tavily'),

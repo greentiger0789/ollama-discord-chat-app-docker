@@ -178,6 +178,43 @@ describe('generate() history handling', () => {
 ================================ */
 
 describe('generate() search decision', () => {
+    test('should honor an explicit web search request even when the planner declines', async () => {
+        let capturedPlan = null;
+        const prompt =
+            'さくら荘のペットな彼女のメイドちゃんについてネットで調べてください。一人称はなんでしたっけ？';
+
+        const mockSearchFn = async plan => {
+            capturedPlan = plan;
+            return 'モック検索結果: 一人称についての情報';
+        };
+
+        let callCount = 0;
+        mockPostHandler = async () => {
+            callCount++;
+            if (callCount === 1) {
+                return {
+                    data: {
+                        message: {
+                            content: JSON.stringify({
+                                needSearch: false,
+                                engine: 'ddg',
+                                searchQuery: ''
+                            })
+                        }
+                    }
+                };
+            }
+            return { data: { message: { content: '検索結果を使った応答' } } };
+        };
+
+        const client = buildClient({ searchFn: mockSearchFn });
+        await client.generate({ prompt, history: [] });
+
+        assert.ok(capturedPlan, 'searchFn should be called for an explicit web search request');
+        assert.equal(capturedPlan.needSearch, true);
+        assert.equal(capturedPlan.searchQuery, prompt);
+    });
+
     test('should trigger search for force keywords', async () => {
         let searchCalled = false;
 
