@@ -1,0 +1,78 @@
+// loadEnv は他モジュールのトップレベル process.env 読み取り（OLLAMA_MODEL 等）より
+// 先に実行される必要があるため、biome の organizeImports 対象外とする
+import './src/loadEnv.ts';
+import { handleOCommand } from './src/commands/oCommand.ts';
+import { handleOResetCommand } from './src/commands/resetCommand.ts';
+import { handleOSummaryCommand } from './src/commands/summaryCommand.ts';
+import { client, DISCORD_TOKEN, registerCommands } from './src/discordClient.ts';
+import { handleMentionMessage } from './src/handlers/mentionHandler.ts';
+import { handleReactionAdd } from './src/handlers/reactionHandler.ts';
+import { handleThreadMessage } from './src/handlers/threadMessageHandler.ts';
+import { createLogger } from './src/logger.ts';
+
+const logger = createLogger('index');
+
+/* ========================================================= */
+/* Ready */
+/* ========================================================= */
+
+client.once('clientReady', async () => {
+    logger.info('Discord client is ready', {
+        userTag: client.user?.tag ?? null
+    });
+    await registerCommands();
+});
+
+/* ========================================================= */
+/* Slash Command */
+/* ========================================================= */
+
+client.on('interactionCreate', async interaction => {
+    if (!interaction.isChatInputCommand()) return;
+
+    switch (interaction.commandName) {
+        case 'o':
+            await handleOCommand(interaction);
+            break;
+        case 'o-reset':
+            await handleOResetCommand(interaction);
+            break;
+        case 'o-summary':
+            await handleOSummaryCommand(interaction);
+            break;
+    }
+});
+
+/* ========================================================= */
+/* Message Responses */
+/* ========================================================= */
+
+client.on('messageCreate', async message => {
+    if (message.channel.isThread()) {
+        await handleThreadMessage(message, { clientId: client.user?.id });
+        return;
+    }
+
+    await handleMentionMessage(message, { clientId: client.user?.id });
+});
+
+client.on('messageReactionAdd', async (reaction, user) => {
+    await handleReactionAdd(reaction, user).catch(err => {
+        logger.error('Failed to handle generation control reaction', err);
+    });
+});
+
+/* ========================================================= */
+/* Shutdown */
+/* ========================================================= */
+
+process.on('SIGTERM', () => {
+    logger.info('Received SIGTERM. Shutting down Discord client.');
+    client.destroy();
+    process.exit(0);
+});
+
+client.login(DISCORD_TOKEN).catch(e => {
+    logger.error('Login failed', e);
+    process.exit(1);
+});

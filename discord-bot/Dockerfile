@@ -32,4 +32,4 @@ RUN npm ci
 # アプリ本体コピー
 COPY . .
 
-CMD ["node", "index.js"]
+CMD ["node", "index.ts"]

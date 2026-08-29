@@ -100,7 +100,7 @@ models:
 
 ## 開発・テスト・Lint
 
-Makefile を推奨（ホスト側で実行）。ボットコンテナ内では自動的に JS 関連ターゲットのみに切り替わります。
+Makefile を推奨（ホスト側で実行）。ボットコンテナ内では自動的に TypeScript 関連ターゲットのみに切り替わります。
 
 ```bash
 # 起動・停止
@@ -115,8 +115,9 @@ make test          # 新規コンテナで実行
 make test-quick    # 起動済みコンテナで実行（手早い）
 
 # Lint
-make lint          # 全 lint（JS + Actions + Dockerfile）
+make lint          # Biome・型検査・Actions・Dockerfile lint
 make lint-js       # Biome lint のみ
+make typecheck     # TypeScript 型検査
 make lint-actions  # actionlint のみ
 make lint-docker   # hadolint のみ
 
@@ -133,6 +134,7 @@ make scan-code     # npm audit
 docker compose run --build --rm --no-deps discord-bot npm test
 docker compose exec discord-bot npm test   # 起動済みコンテナで手早く
 docker compose run --build --rm --no-deps discord-bot npm run lint
+docker compose run --build --rm --no-deps discord-bot npm run typecheck
 ```
 
 ホスト上で直接 Node.js 実行する場合:
@@ -164,13 +166,13 @@ Discord ──> discord-bot ──> ollama (LLM 推論)
 
 | モジュール | 役割 |
 |-----------|------|
-| `index.js` | エントリーポイント。Client 初期化とハンドラ登録 |
-| `ollamaClient.js` | Ollama API 通信・検索判定・履歴要約・モデル設定読み込み |
-| `threadManager.js` | スレッド単位の会話履歴管理 |
-| `messageUtils.js` | メッセージ分割送信・「思考中」メッセージ生成 |
-| `prompts.js` / `systemPrompt.js` / `decisionPrompt.js` | プロンプト管理 |
-| `commands/oCommand.js` | `/o` スラッシュコマンド |
-| `handlers/threadMessageHandler.js` | スレッド内フォローアップ処理 |
+| `index.ts` | エントリーポイント。Client 初期化とハンドラ登録 |
+| `ollamaClient.ts` | Ollama API 通信・検索判定・履歴要約・モデル設定読み込み |
+| `threadManager.ts` | スレッド単位の会話履歴管理 |
+| `messageUtils.ts` | メッセージ分割送信・「思考中」メッセージ生成 |
+| `prompts.ts` / `systemPrompt.ts` / `decisionPrompt.ts` | プロンプト管理 |
+| `commands/oCommand.ts` | `/o` スラッシュコマンド |
+| `handlers/threadMessageHandler.ts` | スレッド内フォローアップ処理 |
 
 ## ディレクトリ構成
 
@@ -183,9 +185,10 @@ Discord ──> discord-bot ──> ollama (LLM 推論)
 ├── .env.example                 # 環境変数テンプレート
 ├── .github/workflows/           # ci.yml / gitleaks.yml / trivy.yml
 └── discord-bot/                 # Discord Bot 本体
-    ├── index.js                 # エントリーポイント
-    ├── dev-runner.js            # 開発用ホットリロードランナー
+    ├── index.ts                 # エントリーポイント
+    ├── dev-runner.ts            # 開発用ホットリロードランナー
     ├── biome.json               # Biome 設定
+    ├── tsconfig.json            # TypeScript 型検査設定
     ├── config/
     │   ├── models.yml           # モデル別パラメータ
     │   └── prompts.yml          # プロンプト設定
@@ -197,11 +200,11 @@ Discord ──> discord-bot ──> ollama (LLM 推論)
 
 `.github/workflows/` に以下を設定しています。
 
-- **`ci.yml`**: Node.js 26 で `npm ci` → `npm run lint` → `npm test`。加えて actionlint / hadolint / Docker ビルドチェック
+- **`ci.yml`**: Node.js 26 で `npm ci` → `npm run lint` → `npm run typecheck` → `npm test`。加えて actionlint / hadolint / Docker ビルドチェック
 - **`gitleaks.yml`**: シークレットスキャン（検知結果を PR にコメント）
 - **`trivy.yml`**: イメージ・ファイルシステムの脆弱性スキャン（HIGH/CRITICAL、結果は GitHub Security タブへ）
 
-PR 作成前には `make lint` と `make test` を通しておくこと。
+PR 作成前には `make lint` と `make test` を通しておくこと（`make lint` は型検査も含みます）。
 
 ## トラブルシューティング
 
