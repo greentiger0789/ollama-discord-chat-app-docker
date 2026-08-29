@@ -157,6 +157,35 @@ describe('oCommand', () => {
             assert.equal(capturedOptions.speaker, 'testuser');
             assert.ok(capturedOptions.signal instanceof AbortSignal);
         });
+
+        test('should register the created thread before initializing its history', async () => {
+            const callOrder = [];
+            const thread = {
+                id: 'thread-managed-registration',
+                send: async () => ({ edit: async () => {} })
+            };
+            const interaction = {
+                options: { getString: () => '登録順序を確認' },
+                deferReply: async () => {},
+                followUp: async () => ({ startThread: async () => thread }),
+                user: { username: 'testuser' }
+            };
+
+            await createHandleOCommand({
+                registerManagedThread: threadId => callOrder.push(['register', threadId]),
+                initializeThread: threadId => callOrder.push(['initialize', threadId]),
+                getThreadHistory: () => [],
+                addToThreadHistory: () => {},
+                generateResponse: async () => '応答',
+                buildMaidThinkingMessage: () => '思考中...',
+                sendSplitMessage: async () => {}
+            })(interaction);
+
+            assert.deepEqual(callOrder, [
+                ['register', thread.id],
+                ['initialize', thread.id]
+            ]);
+        });
     });
 
     describe('thread naming', () => {

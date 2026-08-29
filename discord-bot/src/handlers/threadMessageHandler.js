@@ -9,6 +9,7 @@ import {
     registerGeneration as defaultRegisterGeneration
 } from '../generationRegistry.js';
 import { createLogger } from '../logger.js';
+import { isManagedThread as defaultIsManagedThread } from '../managedThreadRegistry.js';
 import * as messageUtils from '../messageUtils.js';
 import * as ollamaClient from '../ollamaClient.js';
 import { isResponseAbortedError } from '../ollamaClient.js';
@@ -46,7 +47,12 @@ export async function handleThreadMessage(message, deps = {}) {
     if (isAddressedToOtherHuman(message, clientId)) return;
 
     const threadId = message.channel.id;
-    const { clearCompletedGeneration = defaultClearCompletedGeneration } = deps;
+    const {
+        clearCompletedGeneration = defaultClearCompletedGeneration,
+        isManagedThread = defaultIsManagedThread
+    } = deps;
+    if (!(await isManagedThread(message.channel, { clientId }))) return;
+
     clearCompletedGeneration(threadId);
     return await enqueueThreadTask(threadId, () => processThreadMessage(message, deps));
 }

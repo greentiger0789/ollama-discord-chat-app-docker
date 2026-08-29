@@ -5,6 +5,7 @@ import {
 } from '../attachmentLoader.js';
 import { completeGeneration, registerGeneration } from '../generationRegistry.js';
 import { createLogger } from '../logger.js';
+import { MANAGED_THREAD_STARTER_CONTENT, registerManagedThread } from '../managedThreadRegistry.js';
 import { buildMaidThinkingMessage, sendSplitMessage } from '../messageUtils.js';
 import { generateResponse, isResponseAbortedError } from '../ollamaClient.js';
 import { resolveSpeakerName } from '../speakerUtils.js';
@@ -33,7 +34,8 @@ const defaultDeps = {
     createAttachmentHistoryText,
     setThreadHistory,
     registerGeneration,
-    completeGeneration
+    completeGeneration,
+    registerManagedThread
 };
 
 export function createHandleOCommand(deps = defaultDeps) {
@@ -51,7 +53,8 @@ export function createHandleOCommand(deps = defaultDeps) {
         createAttachmentHistoryText,
         setThreadHistory,
         registerGeneration,
-        completeGeneration
+        completeGeneration,
+        registerManagedThread: registerThread
     } = { ...defaultDeps, ...deps };
 
     return async function handleOCommand(interaction) {
@@ -82,7 +85,7 @@ export function createHandleOCommand(deps = defaultDeps) {
             }
 
             const replyMsg = await interaction.followUp({
-                content: 'スレッドを作成しました'
+                content: MANAGED_THREAD_STARTER_CONTENT
             });
 
             const thread = await replyMsg.startThread({
@@ -94,6 +97,7 @@ export function createHandleOCommand(deps = defaultDeps) {
                 userId: interaction.user?.id || null
             });
 
+            registerThread(thread.id);
             initializeThread(thread.id);
             const history = getThreadHistory(thread.id);
             const speaker = resolveSpeakerName(interaction);

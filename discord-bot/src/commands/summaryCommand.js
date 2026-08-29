@@ -1,4 +1,5 @@
 import { createLogger } from '../logger.js';
+import { isManagedThread } from '../managedThreadRegistry.js';
 import { buildMaidThinkingMessage, sendSplitMessage } from '../messageUtils.js';
 import { summarizeConversation } from '../ollamaClient.js';
 import { getThreadHistory } from '../threadManager.js';
@@ -9,7 +10,8 @@ const defaultDeps = {
     getThreadHistory,
     summarizeConversation,
     sendSplitMessage,
-    buildMaidThinkingMessage
+    buildMaidThinkingMessage,
+    isManagedThread
 };
 
 export function createHandleOSummaryCommand(deps = defaultDeps) {
@@ -17,13 +19,25 @@ export function createHandleOSummaryCommand(deps = defaultDeps) {
         getThreadHistory: getHistory,
         summarizeConversation: summarize,
         sendSplitMessage,
-        buildMaidThinkingMessage: buildThinking
+        buildMaidThinkingMessage: buildThinking,
+        isManagedThread: checkManagedThread
     } = { ...defaultDeps, ...deps };
 
     return async function handleOSummaryCommand(interaction) {
         if (!interaction.channel?.isThread?.()) {
             await interaction.reply({
                 content: 'このコマンドはスレッド内でのみ使用できます。',
+                ephemeral: true
+            });
+            return;
+        }
+
+        const managed = await checkManagedThread(interaction.channel, {
+            clientId: interaction.client?.user?.id
+        });
+        if (!managed) {
+            await interaction.reply({
+                content: 'このコマンドは /o で作成したスレッド内でのみ使用できます。',
                 ephemeral: true
             });
             return;
