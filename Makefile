@@ -2,7 +2,7 @@
 # Usage: make [target]
 # Run `make help` for available commands
 
-.PHONY: help lint lint-js lint-actions lint-docker lint-docker-root lint-docker-bot lint-security scan-secrets scan-vulns scan-code test test-quick build up down down-v clean dev shell install
+.PHONY: help lint lint-js typecheck lint-actions lint-docker lint-docker-root lint-docker-bot lint-security scan-secrets scan-vulns scan-code test test-quick build up down down-v clean dev shell install
 
 # Default target
 .DEFAULT_GOAL := help
@@ -48,16 +48,21 @@ endef
 ## ============================================================================
 
 ifeq ($(IN_BOT_CONTAINER),1)
-lint: lint-js
+lint: lint-js typecheck
 	@echo "Docker/action linters are host-only. Run make lint on the host to include them."
 else
-lint: lint-js lint-actions lint-docker
+lint: lint-js typecheck lint-actions lint-docker
 endif
 
 # JavaScript/TypeScript lint (Biome)
 lint-js:
-	@echo "🔍 Running JavaScript lint..."
+	@echo "🔍 Running JavaScript/TypeScript lint..."
 	$(BOT_RUN) npm run lint
+
+# TypeScript type check
+typecheck:
+	@echo "🔎 Running TypeScript type check..."
+	$(BOT_RUN) npm run typecheck
 
 # GitHub Actions workflow lint
 lint-actions:
@@ -198,6 +203,7 @@ help:
 	@echo "Lint Commands:"
 	@echo "  make lint          - Run linters (host: all, container: app lint)"
 	@echo "  make lint-js       - Run JavaScript/TypeScript lint (Biome)"
+	@echo "  make typecheck     - Run TypeScript type check"
 	@echo "  make lint-actions  - Run GitHub Actions workflow lint"
 	@echo "  make lint-docker   - Run Dockerfile lint (hadolint)"
 	@echo "  make lint-security - Run all security scans"

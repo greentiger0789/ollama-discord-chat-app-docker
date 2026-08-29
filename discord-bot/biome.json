@@ -1,9 +1,11 @@
 {
     "files": {
         "includes": [
-            "*.js",
-            "src/**/*.js",
-            "test/**/*.js",
+            "*.ts",
+            "src/**/*.ts",
+            "test/**/*.ts",
+            "testing/**/*.ts",
+            "tsconfig.json",
             "package.json",
             "!node_modules",
             "!coverage"
@@ -21,6 +23,20 @@
             "trailingCommas": "none",
             "semicolons": "always",
             "arrowParentheses": "asNeeded"
+        }
+    },
+    "linter": {
+        "rules": {
+            "preset": "recommended",
+            "suspicious": {
+                "noExplicitAny": "error"
+            },
+            "style": {
+                "useImportType": "error"
+            },
+            "nursery": {
+                "noFloatingPromises": "error"
+            }
         }
     }
 }

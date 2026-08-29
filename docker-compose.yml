@@ -52,7 +52,7 @@ services:
     init: true
     environment:
       IN_DISCORD_BOT_CONTAINER: "true"
-    command: node dev-runner.js
+    command: node dev-runner.ts
     depends_on:
       ollama:
         condition: service_healthy

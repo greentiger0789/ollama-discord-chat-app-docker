@@ -100,7 +100,7 @@ Defines the system prompt (the Maid-chan character settings) and notification me
 
 ## Development, Testing & Lint
 
-The Makefile is recommended (run on the host). Inside the bot container, targets automatically switch to JS-only ones.
+The Makefile is recommended (run on the host). Inside the bot container, targets automatically switch to TypeScript-related checks only.
 
 ```bash
 # Start / stop
@@ -115,8 +115,9 @@ make test          # Run tests in a fresh container
 make test-quick    # Run tests in a running container (faster)
 
 # Lint
-make lint          # All linters (JS + Actions + Dockerfile)
+make lint          # Biome, type checking, Actions, and Dockerfile lint
 make lint-js       # Biome lint only
+make typecheck     # TypeScript type checking
 make lint-actions  # actionlint only
 make lint-docker   # hadolint only
 
@@ -133,6 +134,7 @@ Running commands directly:
 docker compose run --build --rm --no-deps discord-bot npm test
 docker compose exec discord-bot npm test   # Quick rerun in a running container
 docker compose run --build --rm --no-deps discord-bot npm run lint
+docker compose run --build --rm --no-deps discord-bot npm run typecheck
 ```
 
 Running Node.js directly on the host:
@@ -164,13 +166,13 @@ Key modules (`discord-bot/src/`):
 
 | Module | Role |
 |--------|------|
-| `index.js` | Entry point. Initializes the client and registers handlers |
-| `ollamaClient.js` | Ollama API communication, search decision, history summarization, model config loading |
-| `threadManager.js` | Per-thread conversation history management |
-| `messageUtils.js` | Message splitting and "thinking" message generation |
-| `prompts.js` / `systemPrompt.js` / `decisionPrompt.js` | Prompt management |
-| `commands/oCommand.js` | `/o` slash command handler |
-| `handlers/threadMessageHandler.js` | Follow-up message handling within threads |
+| `index.ts` | Entry point. Initializes the client and registers handlers |
+| `ollamaClient.ts` | Ollama API communication, search decision, history summarization, model config loading |
+| `threadManager.ts` | Per-thread conversation history management |
+| `messageUtils.ts` | Message splitting and "thinking" message generation |
+| `prompts.ts` / `systemPrompt.ts` / `decisionPrompt.ts` | Prompt management |
+| `commands/oCommand.ts` | `/o` slash command handler |
+| `handlers/threadMessageHandler.ts` | Follow-up message handling within threads |
 
 ## Directory Structure
 
@@ -183,9 +185,10 @@ Key modules (`discord-bot/src/`):
 ├── .env.example                 # Environment variable template
 ├── .github/workflows/           # ci.yml / gitleaks.yml / trivy.yml
 └── discord-bot/                 # Discord bot itself
-    ├── index.js                 # Entry point
-    ├── dev-runner.js            # Hot-reload runner for development
+    ├── index.ts                 # Entry point
+    ├── dev-runner.ts            # Hot-reload runner for development
     ├── biome.json               # Biome configuration
+    ├── tsconfig.json            # TypeScript type-checking configuration
     ├── config/
     │   ├── models.yml           # Per-model parameters
     │   └── prompts.yml          # Prompt configuration
@@ -197,11 +200,11 @@ Key modules (`discord-bot/src/`):
 
 The following workflows are configured in `.github/workflows/`.
 
-- **`ci.yml`**: Runs `npm ci` → `npm run lint` → `npm test` on Node.js 26, plus actionlint / hadolint / Docker build checks
+- **`ci.yml`**: Runs `npm ci` → `npm run lint` → `npm run typecheck` → `npm test` on Node.js 26, plus actionlint / hadolint / Docker build checks
 - **`gitleaks.yml`**: Secret scanning (posts results as PR comments)
 - **`trivy.yml`**: Vulnerability scanning of images and the filesystem (HIGH/CRITICAL; results uploaded to the GitHub Security tab)
 
-Make sure `make lint` and `make test` pass before creating a PR.
+Make sure `make lint` and `make test` pass before creating a PR (`make lint` includes type checking).
 
 ## Troubleshooting
 

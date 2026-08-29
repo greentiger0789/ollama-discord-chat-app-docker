@@ -5,6 +5,7 @@
 
 ## Testing
 - `docker compose exec -T discord-bot npm test`
+- `docker compose exec -T discord-bot npm run typecheck`
 - not run (explain why)
 - other verification steps
 
