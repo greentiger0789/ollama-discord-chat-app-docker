@@ -38,6 +38,7 @@ describe('summaryCommand', () => {
             };
 
             const handler = createHandleOSummaryCommand({
+                isManagedThread: async () => true,
                 getThreadHistory: () => [],
                 summarizeConversation: async () => {
                     summarizeCalled = true;
@@ -80,6 +81,7 @@ describe('summaryCommand', () => {
             };
 
             const handler = createHandleOSummaryCommand({
+                isManagedThread: async () => true,
                 getThreadHistory: () => [],
                 summarizeConversation: async () => {
                     summarizeCalled = true;
@@ -130,6 +132,7 @@ describe('summaryCommand', () => {
             };
 
             const handler = createHandleOSummaryCommand({
+                isManagedThread: async () => true,
                 getThreadHistory: () => history,
                 summarizeConversation: async h => {
                     capturedHistory = h;
@@ -171,6 +174,7 @@ describe('summaryCommand', () => {
             };
 
             const handler = createHandleOSummaryCommand({
+                isManagedThread: async () => true,
                 getThreadHistory: () => [{ role: 'user', text: 'テスト' }],
                 summarizeConversation: async () => {
                     throw new Error('summarize failed');
@@ -183,6 +187,40 @@ describe('summaryCommand', () => {
 
             assert.equal(followUps.length, 1);
             assert.equal(followUps[0].ephemeral, true);
+        });
+    });
+
+    describe('inside an unmanaged thread', () => {
+        test('should reject the command without reading or summarizing history', async () => {
+            const { createHandleOSummaryCommand } = await import(
+                '../src/commands/summaryCommand.js'
+            );
+            const calls = [];
+            const interaction = {
+                channel: { id: 'ordinary-thread', isThread: () => true },
+                client: { user: { id: 'maid-1' } },
+                user: { id: 'user-1' },
+                reply: async options => calls.push({ type: 'reply', options })
+            };
+
+            await createHandleOSummaryCommand({
+                isManagedThread: async (channel, options) => {
+                    calls.push({ type: 'check', channel, options });
+                    return false;
+                },
+                getThreadHistory: () => calls.push({ type: 'getHistory' }),
+                summarizeConversation: async () => calls.push({ type: 'summarize' })
+            })(interaction);
+
+            assert.equal(calls.length, 2);
+            assert.deepEqual(calls[0], {
+                type: 'check',
+                channel: interaction.channel,
+                options: { clientId: 'maid-1' }
+            });
+            assert.equal(calls[1].type, 'reply');
+            assert.equal(calls[1].options.ephemeral, true);
+            assert.match(calls[1].options.content, /\/o/);
         });
     });
 });

@@ -65,6 +65,7 @@ Run the `/o` command in Discord. If the bot creates a thread and replies, you ar
 - Send a prompt via the required `prompt` option; the bot creates a thread and replies
 - Optionally attach a text file with `file` to include its contents in the answer (up to 512KB and 20,000 characters)
 - Follow-up messages inside the thread keep the conversation context
+- Follow-up responses are limited to threads created by `/o`; regular Discord threads are ignored
 - Messages that directly mention another human member, or reply to that member, are ignored and excluded from conversation history. This applies regardless of the “notify replied user” setting and when both Maid-chan and another member are addressed
 - The “thinking” and most recent response messages include ❌ (abort) and 🔄 (regenerate), available to the user who started that response
 - Long responses are automatically split into 1900-character chunks

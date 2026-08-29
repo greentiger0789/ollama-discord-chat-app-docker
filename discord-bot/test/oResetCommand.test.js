@@ -95,6 +95,7 @@ describe('resetCommand', () => {
             };
 
             const handler = createHandleOResetCommand({
+                isManagedThread: async () => true,
                 clearThreadHistory: threadId => {
                     clearedThreadIds.push(threadId);
                 },
@@ -132,6 +133,7 @@ describe('resetCommand', () => {
             };
 
             const handler = createHandleOResetCommand({
+                isManagedThread: async () => true,
                 clearThreadHistory: () => {
                     throw new Error('boom');
                 }
@@ -165,12 +167,45 @@ describe('resetCommand', () => {
             };
 
             const handler = createHandleOResetCommand({
+                isManagedThread: async () => true,
                 clearThreadHistory: threadManager.clearThreadHistory
             });
 
             await handler(mockInteraction);
 
             assert.deepEqual(threadManager.getThreadHistory('thread-int'), []);
+        });
+    });
+
+    describe('inside an unmanaged thread', () => {
+        test('should reject the command without clearing any state', async () => {
+            const { createHandleOResetCommand } = await import('../src/commands/resetCommand.js');
+            const calls = [];
+            const interaction = {
+                channel: { id: 'ordinary-thread', isThread: () => true },
+                client: { user: { id: 'maid-1' } },
+                user: { id: 'user-1' },
+                reply: async options => calls.push({ type: 'reply', options })
+            };
+
+            await createHandleOResetCommand({
+                isManagedThread: async (channel, options) => {
+                    calls.push({ type: 'check', channel, options });
+                    return false;
+                },
+                clearThreadHistory: () => calls.push({ type: 'clearHistory' }),
+                clearGeneration: () => calls.push({ type: 'clearGeneration' })
+            })(interaction);
+
+            assert.equal(calls.length, 2);
+            assert.deepEqual(calls[0], {
+                type: 'check',
+                channel: interaction.channel,
+                options: { clientId: 'maid-1' }
+            });
+            assert.equal(calls[1].type, 'reply');
+            assert.equal(calls[1].options.ephemeral, true);
+            assert.match(calls[1].options.content, /\/o/);
         });
     });
 });

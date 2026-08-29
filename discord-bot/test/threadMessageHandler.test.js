@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import test, { after, before, describe } from 'node:test';
-import { handleThreadMessage } from '../src/handlers/threadMessageHandler.js';
+import { handleThreadMessage as handleThreadMessageImpl } from '../src/handlers/threadMessageHandler.js';
+
+async function handleThreadMessage(message, deps = {}) {
+    return await handleThreadMessageImpl(message, {
+        isManagedThread: async () => true,
+        ...deps
+    });
+}
 
 async function importFreshThreadManager() {
     const modulePath = new URL('../src/threadManager.js', import.meta.url);
@@ -81,6 +88,38 @@ describe('threadMessageHandler', () => {
     });
 
     describe('handleThreadMessage with mock message', () => {
+        test('should ignore unmanaged threads before any side effect', async () => {
+            const calls = [];
+            const message = {
+                channel: {
+                    id: 'ordinary-thread',
+                    isThread: () => true,
+                    send: async () => calls.push('channel.send')
+                },
+                author: { bot: false, id: 'user-1' },
+                content: '通常スレッドの投稿'
+            };
+
+            await handleThreadMessage(message, {
+                isManagedThread: async (channel, options) => {
+                    calls.push({ channel, options });
+                    return false;
+                },
+                clientId: 'maid-1',
+                clearCompletedGeneration: () => calls.push('clearCompletedGeneration'),
+                getThreadHistory: () => calls.push('getThreadHistory'),
+                addToThreadHistory: () => calls.push('addToThreadHistory'),
+                generateResponse: async () => calls.push('generateResponse')
+            });
+
+            assert.deepEqual(calls, [
+                {
+                    channel: message.channel,
+                    options: { clientId: 'maid-1' }
+                }
+            ]);
+        });
+
         test('should not persist or report an error when a generation is aborted', async () => {
             const added = [];
             const sent = [];

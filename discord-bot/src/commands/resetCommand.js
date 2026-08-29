@@ -1,21 +1,38 @@
 import { clearGeneration } from '../generationRegistry.js';
 import { createLogger } from '../logger.js';
+import { isManagedThread } from '../managedThreadRegistry.js';
 import { clearThreadHistory } from '../threadManager.js';
 
 const logger = createLogger('resetCommand');
 
 const defaultDeps = {
     clearThreadHistory,
-    clearGeneration
+    clearGeneration,
+    isManagedThread
 };
 
 export function createHandleOResetCommand(deps = defaultDeps) {
-    const { clearThreadHistory: clearHistory, clearGeneration } = { ...defaultDeps, ...deps };
+    const {
+        clearThreadHistory: clearHistory,
+        clearGeneration,
+        isManagedThread: checkManagedThread
+    } = { ...defaultDeps, ...deps };
 
     return async function handleOResetCommand(interaction) {
         if (!interaction.channel?.isThread?.()) {
             await interaction.reply({
                 content: 'このコマンドはスレッド内でのみ使用できます。',
+                ephemeral: true
+            });
+            return;
+        }
+
+        const managed = await checkManagedThread(interaction.channel, {
+            clientId: interaction.client?.user?.id
+        });
+        if (!managed) {
+            await interaction.reply({
+                content: 'このコマンドは /o で作成したスレッド内でのみ使用できます。',
                 ephemeral: true
             });
             return;

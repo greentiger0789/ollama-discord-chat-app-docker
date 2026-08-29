@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import test, { after, before, describe } from 'node:test';
 
-import { handleThreadMessage } from '../src/handlers/threadMessageHandler.js';
+import { handleThreadMessage as handleThreadMessageImpl } from '../src/handlers/threadMessageHandler.js';
+
+async function handleThreadMessage(message, deps = {}) {
+    return await handleThreadMessageImpl(message, {
+        isManagedThread: async () => true,
+        ...deps
+    });
+}
 
 function createMessage({ content = '返信内容', reference, mentions } = {}) {
     return {
