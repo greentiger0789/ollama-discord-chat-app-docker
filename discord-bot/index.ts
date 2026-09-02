@@ -66,9 +66,9 @@ client.on('messageReactionAdd', async (reaction, user) => {
 /* Shutdown */
 /* ========================================================= */
 
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
     logger.info('Received SIGTERM. Shutting down Discord client.');
-    client.destroy();
+    await client.destroy();
     process.exit(0);
 });
 
