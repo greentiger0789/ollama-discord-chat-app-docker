@@ -146,6 +146,8 @@ describe('command definitions', () => {
 
         assert.ok(resetCmd && 'description' in resetCmd);
         assert.ok(summaryCmd && 'description' in summaryCmd);
+        assert.ok(typeof resetCmd.description === 'string');
+        assert.ok(typeof summaryCmd.description === 'string');
         assert.match(resetCmd.description, /リセット/);
         assert.match(summaryCmd.description, /要約/);
     });
