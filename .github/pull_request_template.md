@@ -4,8 +4,8 @@
 - mention follow-up work if it is part of this PR
 
 ## Testing
-- `docker compose exec -T discord-bot npm test`
-- `docker compose exec -T discord-bot npm run typecheck`
+- `docker compose exec -T discord-bot pnpm test`
+- `docker compose exec -T discord-bot pnpm run typecheck`
 - not run (explain why)
 - other verification steps
 

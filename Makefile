@@ -57,12 +57,12 @@ endif
 # JavaScript/TypeScript lint (Biome)
 lint-js:
 	@echo "🔍 Running JavaScript/TypeScript lint..."
-	$(BOT_RUN) npm run lint
+	$(BOT_RUN) pnpm run lint
 
 # TypeScript type check
 typecheck:
 	@echo "🔎 Running TypeScript type check..."
-	$(BOT_RUN) npm run typecheck
+	$(BOT_RUN) pnpm run typecheck
 
 # GitHub Actions workflow lint
 lint-actions:
@@ -105,13 +105,13 @@ scan-vulns:
 	docker run --rm -v "$(PROJECT_DIR):/repo" -w /repo aquasec/trivy:$(TRIVY_VERSION) config --severity HIGH,CRITICAL --exit-code 1 /repo/Dockerfile
 	docker run --rm -v "$(PROJECT_DIR):/repo" -w /repo aquasec/trivy:$(TRIVY_VERSION) config --severity HIGH,CRITICAL --exit-code 1 /repo/discord-bot/Dockerfile
 
-# Dependency vulnerability scan (npm audit)
-# Scope: known vulnerabilities in npm dependencies only.
+# Dependency vulnerability scan (pnpm audit)
+# Scope: known vulnerabilities in pnpm dependencies only.
 # For static code analysis, see CodeQL in GitHub Actions (codeql.yml).
 scan-code:
-	@echo "🔍 Running dependency vulnerability scan (npm audit)..."
+	@echo "🔍 Running dependency vulnerability scan (pnpm audit)..."
 	$(call require_host)
-	$(BOT_RUN) npm audit --audit-level=high
+	$(BOT_RUN) pnpm audit --audit-level=high
 
 ## ============================================================================
 ## TEST TARGETS
@@ -120,15 +120,15 @@ scan-code:
 # Run tests
 test:
 	@echo "🧪 Running tests..."
-	$(BOT_RUN) npm test
+	$(BOT_RUN) pnpm test
 
 # Run tests in running container (faster if container is already running)
 test-quick:
 	@echo "🧪 Running tests (quick mode)..."
 ifeq ($(IN_BOT_CONTAINER),1)
-	cd $(BOT_WORKDIR) && npm test
+	cd $(BOT_WORKDIR) && pnpm test
 else
-	$(BOT_EXEC) npm test
+	$(BOT_EXEC) pnpm test
 endif
 
 ## ============================================================================
@@ -189,7 +189,7 @@ endif
 # Install dependencies (rebuild node_modules)
 install:
 	@echo "📦 Installing dependencies..."
-	$(BOT_RUN) npm ci
+	$(BOT_RUN) pnpm install --frozen-lockfile
 
 ## ============================================================================
 ## HELP
@@ -211,7 +211,7 @@ help:
 	@echo "Security Scan Commands:"
 	@echo "  make scan-secrets - Run secret detection (Gitleaks)"
 	@echo "  make scan-vulns   - Run vulnerability scan (Trivy)"
-	@echo "  make scan-code    - Run code vulnerability scan (npm audit)"
+	@echo "  make scan-code    - Run code vulnerability scan (pnpm audit)"
 	@echo ""
 	@echo "Test Commands:"
 	@echo "  make test          - Run tests (fresh container)"

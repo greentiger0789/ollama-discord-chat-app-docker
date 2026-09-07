@@ -1,4 +1,4 @@
-# 依存関係（node_modules は npm ci でコンテナ内にインストールするため除外）
+# 依存関係（node_modules は pnpm でコンテナ内にインストールするため除外）
 node_modules
 
 # シークレット・環境変数（絶対にイメージへ含めない）
@@ -8,6 +8,7 @@ node_modules
 
 # ログ・一時ファイル
 npm-debug.log*
+pnpm-debug.log*
 *.log
 
 # VCS / CI 設定

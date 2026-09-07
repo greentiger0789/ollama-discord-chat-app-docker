@@ -125,26 +125,30 @@ make lint-docker   # hadolint のみ
 make lint-security # 全スキャン実行
 make scan-secrets  # Gitleaks
 make scan-vulns    # Trivy
-make scan-code     # npm audit
+make scan-code     # pnpm audit
 ```
 
 直接実行する場合:
 
 ```bash
-docker compose run --build --rm --no-deps discord-bot npm test
-docker compose exec discord-bot npm test   # 起動済みコンテナで手早く
-docker compose run --build --rm --no-deps discord-bot npm run lint
-docker compose run --build --rm --no-deps discord-bot npm run typecheck
+docker compose run --build --rm --no-deps discord-bot pnpm test
+docker compose exec discord-bot pnpm test   # 起動済みコンテナで手早く
+docker compose run --build --rm --no-deps discord-bot pnpm run lint
+docker compose run --build --rm --no-deps discord-bot pnpm run typecheck
 ```
 
 ホスト上で直接 Node.js 実行する場合:
 
 ```bash
 cd discord-bot
-npm ci
-npm run dev    # ホットリロード付き
-npm start      # 通常実行
+npm install --global pnpm@10.34.5
+pnpm install --frozen-lockfile
+pnpm run dev    # ホットリロード付き
+pnpm start      # 通常実行
 ```
+
+Node.js 26 には Corepack が同梱されないため、直接実行する場合は上記の固定バージョンを
+インストールしてください。Docker 経由で利用する場合、ホストへの pnpm 導入は不要です。
 
 ## アーキテクチャ
 
@@ -200,7 +204,7 @@ Discord ──> discord-bot ──> ollama (LLM 推論)
 
 `.github/workflows/` に以下を設定しています。
 
-- **`ci.yml`**: Node.js 26 で `npm ci` → `npm run lint` → `npm run typecheck` → `npm test`。加えて actionlint / hadolint / Docker ビルドチェック
+- **`ci.yml`**: pnpm 10.34.5 と Node.js 26 で frozen install → lint → typecheck → test。加えて actionlint / hadolint / Docker ビルドチェック
 - **`gitleaks.yml`**: シークレットスキャン（検知結果を PR にコメント）
 - **`trivy.yml`**: イメージ・ファイルシステムの脆弱性スキャン（HIGH/CRITICAL、結果は GitHub Security タブへ）
 
