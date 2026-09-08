@@ -13,5 +13,6 @@
 .env
 .codex
 discord-bot/node_modules/
+discord-bot/.pnpm-store/
 npm-debug.log*
 pnpm-debug.log*
