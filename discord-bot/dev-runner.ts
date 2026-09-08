@@ -7,8 +7,8 @@ import { APP_DIR, readEnvFile } from './src/env.ts';
 const CHILD_COMMAND = ['node', 'index.ts'] as const;
 const POLL_INTERVAL_MS = 1000;
 const MANIFEST_STATE_FILE = path.join(APP_DIR, 'node_modules', '.manifest.hash');
-const LOCK_FILES = ['package-lock.json', 'npm-shrinkwrap.json'];
-const MANIFEST_FILES = ['package.json', ...LOCK_FILES];
+const LOCK_FILES = ['pnpm-lock.yaml'];
+const MANIFEST_FILES = ['package.json', 'pnpm-workspace.yaml', ...LOCK_FILES];
 const WATCH_ROOTS = ['index.ts', 'tsconfig.json', '.env', ...MANIFEST_FILES, 'src', 'config'];
 
 type Snapshot = Map<string, string>;
@@ -114,8 +114,9 @@ function computeManifestHash(): string {
 
 function hasInstalledDependencies(): boolean {
     const nodeModulesPath = path.join(APP_DIR, 'node_modules');
+    const pnpmVirtualStorePath = path.join(nodeModulesPath, '.pnpm');
 
-    if (!fs.existsSync(nodeModulesPath)) {
+    if (!fs.existsSync(nodeModulesPath) || !fs.existsSync(pnpmVirtualStorePath)) {
         return false;
     }
 
@@ -167,14 +168,6 @@ function runCommand(command: string, args: readonly string[]): Promise<void> {
     });
 }
 
-function hasLockFile(): boolean {
-    return LOCK_FILES.some(relativePath => fs.existsSync(path.join(APP_DIR, relativePath)));
-}
-
-function getInstallCommandArgs(): string[] {
-    return hasLockFile() ? ['ci'] : ['install'];
-}
-
 function getErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
@@ -190,7 +183,7 @@ async function ensureDependencies(): Promise<boolean> {
         console.log('[hot-reload] node_modules is missing. Installing dependencies...');
 
         try {
-            await runCommand('npm', getInstallCommandArgs());
+            await runCommand('pnpm', ['install', '--frozen-lockfile']);
             saveManifestHash(manifestHash);
             return true;
         } catch (error) {
@@ -213,7 +206,7 @@ async function ensureDependencies(): Promise<boolean> {
     console.log('[hot-reload] Dependency manifest changed. Reinstalling dependencies...');
 
     try {
-        await runCommand('npm', getInstallCommandArgs());
+        await runCommand('pnpm', ['install', '--frozen-lockfile']);
         saveManifestHash(manifestHash);
         return true;
     } catch (error) {

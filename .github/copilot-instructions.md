@@ -28,16 +28,16 @@ make test-quick    # テスト実行（起動済みコンテナ）
 make lint          # Biome・型検査・Actions・Dockerfile lint
 make lint-js       # Biome lint のみ
 make typecheck     # TypeScript 型検査
-make lint-security # Gitleaks / Trivy / npm audit
+make lint-security # Gitleaks / Trivy / pnpm audit
 ```
 
 直接実行する場合:
 
 ```bash
-docker compose run --build --rm --no-deps discord-bot npm test
-docker compose exec discord-bot npm test   # 起動済みコンテナで手早く
-docker compose run --build --rm --no-deps discord-bot npm run lint
-docker compose run --build --rm --no-deps discord-bot npm run typecheck
+docker compose run --build --rm --no-deps discord-bot pnpm test
+docker compose exec discord-bot pnpm test   # 起動済みコンテナで手早く
+docker compose run --build --rm --no-deps discord-bot pnpm run lint
+docker compose run --build --rm --no-deps discord-bot pnpm run typecheck
 ```
 
 ## コーディング規約
@@ -45,7 +45,7 @@ docker compose run --build --rm --no-deps discord-bot npm run typecheck
 - **フォーマッタ/リンタ: Biome** (`discord-bot/biome.json`)
   - インデント: スペース 4、行幅 100
   - シングルクォート、セミコロンあり、末尾カンマなし、アロー関数の括弧は省略 (`asNeeded`)
-  - `npm run lint` は `--error-on-warnings` 付き。警告でも CI が落ちるため、編集後は必ず `npm run lint`（または `make lint-js`）で検証
+  - `pnpm run lint` は `--error-on-warnings` 付き。警告でも CI が落ちるため、編集後は必ず `pnpm run lint`（または `make lint-js`）で検証
 - **ESM のみ**: `import`/`export` 構文を使用。CommonJS は禁止
 - **TypeScript**: `strict` を維持し、相対 import は `.ts` を明記する。型だけの import は `import type` を使い、Node の型消去で実行できない構文は使わない
 - **Node.js 組み込みモジュール優先**: 外部依存を追加する前に `node:` 標準モジュールで実現できないか検討
@@ -56,13 +56,13 @@ docker compose run --build --rm --no-deps discord-bot npm run typecheck
 
 - **テストランナー: Node.js 組み込み `node:test`**（Jest/Mocha は不使用）。`assert/strict` を使用
 - テストファイルは `discord-bot/test/*.test.ts`
-- `npm test` は `LOG_LEVEL=silent node --test` で実行される
+- `pnpm test` は `LOG_LEVEL=silent node --test` で実行される
 - モジュール状態を持つ対象（例: `threadManager.ts`）は、テスト内でクエリパラメータ付き動的 import により毎回 fresh import するパターンを採用 — 既存テストのパターンに倣うこと
 - 新機能追加時は対応するテストファイルを作成/更新し、`make test` で全件パスを確認
 
 ## アーキテクチャ上の注意点
 
-- **Docker 開発フローが基本**: `discord-bot/` は bind mount され、`dev-runner.ts` が `index.ts`, `tsconfig.json`, `src/`, `config/`, `.env` の変更を監視してホットリロードする。`package.json` 変更時はコンテナ内で自動 `npm ci` される
+- **Docker 開発フローが基本**: `discord-bot/` は bind mount され、`dev-runner.ts` が `index.ts`, `tsconfig.json`, `src/`, `config/`, `.env` の変更を監視してホットリロードする。`package.json`、`pnpm-lock.yaml`、`pnpm-workspace.yaml` の変更時はコンテナ内で自動 `pnpm install --frozen-lockfile` される
 - **`.env` はコミット禁止**（トークン等を含む）。テンプレートは `.env.example`。Gitleaks CI でシークレットスキャンが走る
 - **Ollama 接続 URL**: コンテナ内からは `http://ollama:11434`（サービス名解決）。ホストからは `http://localhost:11434`
 - **GPU 前提**: ollama サービスは NVIDIA GPU デバイス要求あり。GPU 無し環境では `deploy.resources` の調整が必要な点に注意
@@ -71,7 +71,7 @@ docker compose run --build --rm --no-deps discord-bot npm run typecheck
 
 ## CI/CD
 
-- `ci.yml`: Node.js 26 で `npm ci` → `npm run lint` → `npm run typecheck` → `npm test`、加えて actionlint / hadolint / Docker ビルドチェック
+- `ci.yml`: pnpm 10.34.5 と Node.js 26 で frozen install → lint → typecheck → test、加えて actionlint / hadolint / Docker ビルドチェック
 - `gitleaks.yml`: シークレットスキャン
 - `trivy.yml`: 脆弱性スキャン（HIGH/CRITICAL）
 - PR 作成前には `make lint` と `make test` を通しておくこと

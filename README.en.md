@@ -125,26 +125,30 @@ make lint-docker   # hadolint only
 make lint-security # Run all scans
 make scan-secrets  # Gitleaks
 make scan-vulns    # Trivy
-make scan-code     # npm audit
+make scan-code     # pnpm audit
 ```
 
 Running commands directly:
 
 ```bash
-docker compose run --build --rm --no-deps discord-bot npm test
-docker compose exec discord-bot npm test   # Quick rerun in a running container
-docker compose run --build --rm --no-deps discord-bot npm run lint
-docker compose run --build --rm --no-deps discord-bot npm run typecheck
+docker compose run --build --rm --no-deps discord-bot pnpm test
+docker compose exec discord-bot pnpm test   # Quick rerun in a running container
+docker compose run --build --rm --no-deps discord-bot pnpm run lint
+docker compose run --build --rm --no-deps discord-bot pnpm run typecheck
 ```
 
 Running Node.js directly on the host:
 
 ```bash
 cd discord-bot
-npm ci
-npm run dev    # With hot reload
-npm start      # Normal run
+npm install --global pnpm@10.34.5
+pnpm install --frozen-lockfile
+pnpm run dev    # With hot reload
+pnpm start      # Normal run
 ```
+
+Node.js 26 does not bundle Corepack, so direct host execution requires installing the pinned
+pnpm version shown above. Using Docker does not require pnpm on the host.
 
 ## Architecture
 
@@ -200,7 +204,7 @@ Key modules (`discord-bot/src/`):
 
 The following workflows are configured in `.github/workflows/`.
 
-- **`ci.yml`**: Runs `npm ci` → `npm run lint` → `npm run typecheck` → `npm test` on Node.js 26, plus actionlint / hadolint / Docker build checks
+- **`ci.yml`**: Runs frozen install → lint → typecheck → test with pnpm 10.34.5 and Node.js 26, plus actionlint / hadolint / Docker build checks
 - **`gitleaks.yml`**: Secret scanning (posts results as PR comments)
 - **`trivy.yml`**: Vulnerability scanning of images and the filesystem (HIGH/CRITICAL; results uploaded to the GitHub Security tab)
 
