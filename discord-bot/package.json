@@ -20,7 +20,7 @@
         "check": "pnpm run lint && pnpm run typecheck && pnpm test"
     },
     "devDependencies": {
-        "@biomejs/biome": "2.6.2",
+        "@biomejs/biome": "2.6.3",
         "@types/node": "26.6.5",
         "typescript": "5.9.3"
     },
