@@ -355,10 +355,6 @@ packages:
   undici-types@8.9.0:
     resolution: {integrity: sha512-KTDyRTYX8sWmKXAikPHHSyc63CRPETMctyjKFupcC6OBLXT3xsN0e9aF7m+mIXutFWpUXuedtowG7iLOzp0kQg==}
 
-  undici@6.28.0:
-    resolution: {integrity: sha512-LIY910g9TI13YS95lrMFrs8Rm/u/irgHeTWoKCoteeJ04CUJ92eEfj0rVn+7VKMPBpUPiUoBKfhNyLI23EE/KA==}
-    engines: {node: '>=18.17'}
-
   undici@6.29.1:
     resolution: {integrity: sha512-EvRlUt/QqAEvXdQeRMYUfwOQsfzpDztykrG2owGEE/rBOBoYv9uF39ZzsNDh4lTFHhTr2XOZjKkYgueD12ZmGA==}
     engines: {node: '>=18.17'}
@@ -452,7 +448,7 @@ snapshots:
       discord-api-types: 0.38.59
       magic-bytes.js: 1.13.0
       tslib: 2.8.1
-      undici: 6.28.0
+      undici: 6.29.1
 
   '@discordjs/util@1.2.0':
     dependencies:
@@ -681,8 +677,6 @@ snapshots:
   typescript@5.9.3: {}
 
   undici-types@8.9.0: {}
-
-  undici@6.28.0: {}
 
   undici@6.29.1: {}
 
